@@ -12,7 +12,7 @@ from django.utils.six.moves import xrange
 from django.utils.translation import ugettext as _
 
 
-__all__ = ('BaseFormSet', 'all_valid')
+__all__ = ('BaseFormSet' ,'all_valid')
 
 # special field names
 TOTAL_FORM_COUNT = 'TOTAL_FORMS'
@@ -40,10 +40,13 @@ class ManagementForm(Form):
 class BaseFormSet(object):
     """
     A collection of instances of the same Form class.
+    同一类型的 form 集合
     """
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  initial=None, error_class=ErrorList):
+        #data 和 files 用来绑定 postdata
         self.is_bound = data is not None or files is not None
+
         self.prefix = prefix or self.get_default_prefix()
         self.auto_id = auto_id
         self.data = data or {}
@@ -52,15 +55,24 @@ class BaseFormSet(object):
         self.error_class = error_class
         self._errors = None
         self._non_form_errors = None
+
+        看, 在构造函数就已经实例化所有的 form
         # construct the forms in the formset
         self._construct_forms()
+        |
+        |
+        """
+        self.forms = []
+        for i in xrange(min(self.total_form_count(), self.absolute_max)):
+            self.forms.append(self._construct_form(i))
+        """
 
     def __str__(self):
         return self.as_table()
 
     def __iter__(self):
         """Yields the forms in the order they should be rendered"""
-        return iter(self.forms)
+        return iter(self.forms) 实际上迭代的是 forms 
 
     def __getitem__(self, index):
         """Returns the form at the given index, based on the rendering order"""
@@ -80,9 +92,11 @@ class BaseFormSet(object):
     def management_form(self):
         """Returns the ManagementForm instance for this FormSet."""
         if self.is_bound:
-            form = ManagementForm(self.data, auto_id=self.auto_id, prefix=self.prefix)
+            form = ManagementForm(self.data, auto_id=self.auto_id, prefix=self.prefix) 构造
+
             if not form.is_valid():
                 raise ValidationError('ManagementForm data is missing or has been tampered with')
+
         else:
             form = ManagementForm(auto_id=self.auto_id, prefix=self.prefix, initial={
                 TOTAL_FORM_COUNT: self.total_form_count(),
@@ -94,16 +108,19 @@ class BaseFormSet(object):
     def total_form_count(self):
         """Returns the total number of forms in this FormSet."""
         if self.is_bound:
-            return self.management_form.cleaned_data[TOTAL_FORM_COUNT]
+            return self.management_form.cleaned_data[TOTAL_FORM_COUNT] 这种叫链式调用么, 不懂
+            如果已经绑定, 直接从 ManagementForm 中读取
         else:
             initial_forms = self.initial_form_count()
-            total_forms = initial_forms + self.extra
+            total_forms = initial_forms + self.
+
             # Allow all existing related objects/inlines to be displayed,
             # but don't allow extra beyond max_num.
             if initial_forms > self.max_num >= 0:
                 total_forms = initial_forms
             elif total_forms > self.max_num >= 0:
                 total_forms = self.max_num
+
         return total_forms
 
     def initial_form_count(self):
@@ -118,6 +135,8 @@ class BaseFormSet(object):
         return initial_forms
 
     def _construct_forms(self):
+        在 self.initial 中存放了各种 form, 这个函数中实例话 self.initial 中的所有 form,
+        并将其放入到 self.form 中
         # instantiate all the forms and put them in self.forms
         self.forms = []
         for i in xrange(min(self.total_form_count(), self.absolute_max)):
@@ -132,19 +151,23 @@ class BaseFormSet(object):
             'prefix': self.add_prefix(i),
             'error_class': self.error_class,
             }
+
         if self.is_bound:
             defaults['data'] = self.data
             defaults['files'] = self.files
+
         if self.initial and not 'initial' in kwargs:
             try:
                 defaults['initial'] = self.initial[i]
             except IndexError:
                 pass
+
         # Allow extra forms to be empty.
         if i >= self.initial_form_count():
             defaults['empty_permitted'] = True
+
         defaults.update(kwargs)
-        form = self.form(**defaults)
+        form = self.form(**defaults) 不懂
         self.add_fields(form, i)
         return form
 
@@ -168,15 +191,18 @@ class BaseFormSet(object):
         self.add_fields(form, None)
         return form
 
-    # Maybe this should just go away?
+    # Maybe this should just go away? 用处真的不大
     @property
     def cleaned_data(self):
         """
+        收集所有 forms 的数据, 放入到一个列表中, 每个元素都是一个字典
+        
         Returns a list of form.cleaned_data dicts for every form in self.forms.
         """
-        if not self.is_valid():
+        if not self.is_valid(): 尚未有数据传入的时候, 异常
             raise AttributeError("'%s' object has no attribute 'cleaned_data'" % self.__class__.__name__)
-        return [form.cleaned_data for form in self.forms]
+
+        return [form.cleaned_data for form in self.forms] 已经传入 POST 数据, 则可以从各个 form 中获取数据
 
     @property
     def deleted_forms(self):
@@ -186,6 +212,7 @@ class BaseFormSet(object):
         """
         if not self.is_valid() or not self.can_delete:
             raise AttributeError("'%s' object has no attribute 'deleted_forms'" % self.__class__.__name__)
+
         # construct _deleted_form_indexes which is just a list of form indexes
         # that have had their deletion widget set to True
         if not hasattr(self, '_deleted_form_indexes'):
@@ -232,6 +259,7 @@ class BaseFormSet(object):
                     return (1, 0) # +infinity, larger than any number
                 return (0, k[1])
             self._ordering.sort(key=compare_ordering_key)
+
         # Return a list of form.cleaned_data dicts in the order specified by
         # the form data.
         return [self.forms[i[0]] for i in self._ordering]
@@ -271,6 +299,7 @@ class BaseFormSet(object):
         """
         if not self.is_bound:
             return False
+
         # We loop over every form.errors here rather than short circuiting on the
         # first failure to make sure validation gets triggered for every form.
         forms_valid = True
@@ -290,11 +319,23 @@ class BaseFormSet(object):
         Cleans all of self.data and populates self._errors.
         """
         self._errors = []
-        if not self.is_bound: # Stop further processing.
+        if not self.is_bound: # Stop further processing. 没有数据
             return
+
         for i in range(0, self.total_form_count()):
             form = self.forms[i]
-            self._errors.append(form.errors)
+            """
+            技巧:
+            def _get_errors(self):
+                "Returns an ErrorDict for the data provided for the form"
+                if self._errors is None:
+                    self.full_clean()
+                return self._errors
+            errors = property(_get_errors)
+            可以看 form.errors 其实是调用了 form.clean 函数, form.clean 会检测数据
+            """
+            self._errors.append(form.errors) 
+
         # Give self.clean() a chance to do cross-form validation.
         try:
             self.clean()
@@ -321,9 +362,10 @@ class BaseFormSet(object):
         if self.can_order:
             # Only pre-fill the ordering field for initial forms.
             if index is not None and index < self.initial_form_count():
-                form.fields[ORDERING_FIELD_NAME] = IntegerField(label=_('Order'), initial=index+1, required=False)
-            else:
-                form.fields[ORDERING_FIELD_NAME] = IntegerField(label=_('Order'), required=False)
+                form.fields[ORDERING_FIELD_NAME] = IntegerField(label=_('Order'), initial=index+1, required=False) 整数域
+            else:   
+                form.fields[ORDERING_FIELD_NAME] = IntegerField(label=_('Order'), required=False)                   整数域
+
         if self.can_delete:
             form.fields[DELETION_FIELD_NAME] = BooleanField(label=_('Delete'), required=False)
 
@@ -369,16 +411,22 @@ class BaseFormSet(object):
 
 def formset_factory(form, formset=BaseFormSet, extra=1, can_order=False,
                     can_delete=False, max_num=None):
+    
+    根据一个 form 构造一个表单集合
     """Return a FormSet for the given form class."""
     if max_num is None:
         max_num = DEFAULT_MAX_NUM
+
     # hard limit on forms instantiated, to prevent memory-exhaustion attacks
     # limit defaults to DEFAULT_MAX_NUM, but developer can increase it via max_num
     absolute_max = max(DEFAULT_MAX_NUM, max_num)
     attrs = {'form': form, 'extra': extra,
              'can_order': can_order, 'can_delete': can_delete,
              'max_num': max_num, 'absolute_max': absolute_max}
+             
+    #返回一个类型: http://docs.python.org/2/library/functions.html#type
     return type(form.__name__ + str('FormSet'), (formset,), attrs)
+                类的名字                        父类
 
 def all_valid(formsets):
     """Returns true if every formset in formsets is valid."""

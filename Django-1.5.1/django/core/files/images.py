@@ -6,6 +6,7 @@ Requires PIL, as you might imagine.
 
 from django.core.files import File
 
+图像文件
 class ImageFile(File):
     """
     A mixin for use alongside django.core.files.base.File, which provides

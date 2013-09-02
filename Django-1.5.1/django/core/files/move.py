@@ -16,15 +16,17 @@ except ImportError:
         """Copy all stat info (mode bits, atime and mtime) from src to dst"""
         st = os.stat(src)
         mode = stat.S_IMODE(st.st_mode)
+
         if hasattr(os, 'utime'):
             os.utime(dst, (st.st_atime, st.st_mtime))
+
         if hasattr(os, 'chmod'):
             os.chmod(dst, mode)
 
 __all__ = ['file_move_safe']
 
 def _samefile(src, dst):
-    # Macintosh, Unix.
+    # Macintosh, Unix. 苹果
     if hasattr(os.path,'samefile'):
         try:
             return os.path.samefile(src, dst)
@@ -54,7 +56,7 @@ def file_move_safe(old_file_name, new_file_name, chunk_size = 1024*64, allow_ove
         os.rename(old_file_name, new_file_name)
         return
     except OSError:
-        # This will happen with os.rename if moving to another filesystem
+        # This will happen with os.rename if moving to another filesystem 跨文件系统会出错
         # or when moving opened files on certain operating systems
         pass
 

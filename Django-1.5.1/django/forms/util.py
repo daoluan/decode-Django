@@ -19,7 +19,7 @@ def flatatt(attrs):
     If the passed dictionary is empty, then return an empty string.
 
     The result is passed through 'mark_safe'.
-    """
+    """                         特地加了空格
     return format_html_join('', ' {0}="{1}"', sorted(attrs.items()))
 
 @python_2_unicode_compatible

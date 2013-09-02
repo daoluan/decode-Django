@@ -34,6 +34,7 @@ __all__ = [
 # Any backend scheme that is not in this dictionary is treated as a Python
 # import path to a custom backend.
 BACKENDS = {
+    五种缓存方案
     'memcached': 'memcached',
     'locmem': 'locmem',
     'file': 'filebased',
@@ -41,8 +42,9 @@ BACKENDS = {
     'dummy': 'dummy',
 }
 
-DEFAULT_CACHE_ALIAS = 'default'
+DEFAULT_CACHE_ALIAS = 'default' 默认
 
+不懂
 def parse_backend_uri(backend_uri):
     """
     Converts the "backend_uri" into a cache scheme ('db', 'memcached', etc), a
@@ -51,12 +53,14 @@ def parse_backend_uri(backend_uri):
     """
     if backend_uri.find(':') == -1:
         raise InvalidCacheBackendError("Backend URI must start with scheme://")
+
     scheme, rest = backend_uri.split(':', 1)
     if not rest.startswith('//'):
         raise InvalidCacheBackendError("Backend URI must start with scheme://")
 
     host = rest[2:]
     qpos = rest.find('?')
+
     if qpos != -1:
         params = dict(parse_qsl(rest[qpos+1:]))
         host = rest[2:qpos]
@@ -67,22 +71,25 @@ def parse_backend_uri(backend_uri):
 
     return scheme, host, params
 
-if DEFAULT_CACHE_ALIAS not in settings.CACHES:
+if DEFAULT_CACHE_ALIAS not in settings.CACHES: 如果没有 CACHES 中没有 default
     raise ImproperlyConfigured("You must define a '%s' cache" % DEFAULT_CACHE_ALIAS)
 
+解析后端缓存设置, backend 是 setting 中指定的某个机制
 def parse_backend_conf(backend, **kwargs):
     """
     Helper function to parse the backend configuration
     that doesn't use the URI notation.
     """
     # Try to get the CACHES entry for the given backend name first
-    conf = settings.CACHES.get(backend, None)
+    conf = settings.CACHES.get(backend, None) 获取设置 backend 应该是 default
+
     if conf is not None:
         args = conf.copy()
         args.update(kwargs)
-        backend = args.pop('BACKEND')
-        location = args.pop('LOCATION', '')
+        backend = args.pop('BACKEND') 
+        location = args.pop('LOCATION', '') 
         return backend, location, args
+
     else:
         try:
             # Trying to import the given backend, in case it's a dotted path
@@ -91,9 +98,11 @@ def parse_backend_conf(backend, **kwargs):
             backend_cls = getattr(mod, cls_name)
         except (AttributeError, ImportError, ValueError):
             raise InvalidCacheBackendError("Could not find backend '%s'" % backend)
+
         location = kwargs.pop('LOCATION', '')
         return backend, location, kwargs
 
+动态加载缓存机制
 def get_cache(backend, **kwargs):
     """
     Function to load a cache backend dynamically. This is flexible by design
@@ -116,28 +125,33 @@ def get_cache(backend, **kwargs):
 
     """
     try:
-        if '://' in backend:
+        if '://' in backend: 太过简单的检测
             # for backwards compatibility
             backend, location, params = parse_backend_uri(backend)
+
             if backend in BACKENDS:
                 backend = 'django.core.cache.backends.%s' % BACKENDS[backend]
+
             params.update(kwargs)
             mod = importlib.import_module(backend)
-            backend_cls = mod.CacheClass
+            backend_cls = mod.CacheClass 厉害, 每个模块中都有一个 CacheClass
         else:
             backend, location, params = parse_backend_conf(backend, **kwargs)
             mod_path, cls_name = backend.rsplit('.', 1)
             mod = importlib.import_module(mod_path)
             backend_cls = getattr(mod, cls_name)
+
     except (AttributeError, ImportError) as e:
         raise InvalidCacheBackendError(
             "Could not find backend '%s': %s" % (backend, e))
+
     cache = backend_cls(location, params)
+
     # Some caches -- python-memcached in particular -- need to do a cleanup at the
     # end of a request cycle. If the cache provides a close() method, wire it up
     # here.
     if hasattr(cache, 'close'):
-        signals.request_finished.connect(cache.close)
+        signals.request_finished.connect(cache.close) 不懂 
     return cache
 
 cache = get_cache(DEFAULT_CACHE_ALIAS)

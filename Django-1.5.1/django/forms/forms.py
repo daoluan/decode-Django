@@ -2,6 +2,32 @@
 Form classes
 表单类
 """
+"""
+from django import forms
+
+class ContactForm(forms.Form):
+    subject = forms.CharField(max_length=100)
+    message = forms.CharField()
+    sender = forms.EmailField()
+    cc_myself = forms.BooleanField(required=False)
+
+from django.shortcuts import render
+from django.http import HttpResponseRedirect
+
+def contact(request):
+    if request.method == 'POST': # If the form has been submitted...
+        form = ContactForm(request.POST) # A form bound to the POST data
+        if form.is_valid(): # All validation rules pass
+            # Process the data in form.cleaned_data
+            # ...
+            return HttpResponseRedirect('/thanks/') # Redirect after POST
+    else:
+        form = ContactForm() # An unbound form
+
+    return render(request, 'contact.html', {
+        'form': form,
+    })
+"""
 
 from __future__ import absolute_import, unicode_literals
 
@@ -82,12 +108,13 @@ class BaseForm(object):
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  initial=None, error_class=ErrorList, label_suffix=':',
                  empty_permitted=False):
+        不懂, data 有什么用?
         self.is_bound = data is not None or files is not None
         self.data = data or {}
         self.files = files or {}
         self.auto_id = auto_id
         self.prefix = prefix
-        self.initial = initial or {}
+        self.initial = initial or {} 字典
         self.error_class = error_class
         self.label_suffix = label_suffix
         self.empty_permitted = empty_permitted
@@ -99,7 +126,10 @@ class BaseForm(object):
         # alter self.fields, we create self.fields here by copying base_fields.
         # Instances should always modify self.fields; they should not modify
         # self.base_fields.
-        self.fields = copy.deepcopy(self.base_fields) 不懂
+        将 self.base_fields 中的 fields 复制进 self.field
+        self.fields 是字典
+        
+        self.fields = copy.deepcopy(self.base_fields) 不懂: 此为子类所需要重新设置的 self.base_fields
 
     def __str__(self):
         return self.as_table() 经常在 template 中用到的函数
@@ -128,7 +158,7 @@ class BaseForm(object):
         Returns True if the form has no errors. Otherwise, False. If errors are
         being ignored, returns False.
         """
-        return self.is_bound and not bool(self.errors)
+        return self.is_bound and not bool(self.errors) 会自动检查所有数据
 
     def add_prefix(self, field_name):
         """
@@ -229,6 +259,7 @@ class BaseForm(object):
         以表格的 HTML 返回,不包括 <table>
         "Returns this form rendered as HTML <tr>s -- excluding the <table></table>."
         return self._html_output(
+            自动添加 lebel
             normal_row = '<tr%(html_class_attr)s><th>%(label)s</th><td>%(errors)s%(field)s%(help_text)s</td></tr>',
             error_row = '<tr><td colspan="2">%s</td></tr>',
             row_ender = '</td></tr>',
@@ -275,7 +306,8 @@ class BaseForm(object):
 
     def full_clean(self):
         """
-        检测所有的数据, 并将错误填充到 self._errors
+        收集所有的数据, 放入 self.cleaned_data, 注意: 并没有检测数据的有效性, 并将错误填充到 self._errors
+
         Cleans all of self.data and populates self._errors and
         self.cleaned_data.
         """
@@ -294,7 +326,9 @@ class BaseForm(object):
         self._clean_form() 没做什么, 简单设置 clean_data, 在 _clean_fields 已经获取设置了
         self._post_clean() 什么都没做
 
+        检测清理 fields 的数据
     def _clean_fields(self):
+        遍历字典
         for name, field in self.fields.items():
             # value_from_datadict() gets the data from the data dictionaries.
 
@@ -341,8 +375,8 @@ class BaseForm(object):
         called on every field. Any ValidationError raised by this method will
         not be associated with a particular field; it will have a special-case
         association with the field named '__all__'.
-        """
-        return self.cleaned_data
+        """ 
+        return self.cleaned_data 在 full_clean 中已经设置完毕
 
     def has_changed(self):
         """
@@ -383,11 +417,13 @@ class BaseForm(object):
         Provide a description of all media required to render the widgets on this form
         """
         media = Media()
-        #values 如果是 list, 返回所有的值, 如果是 map, 返回值
+        # values:如果是 list, 返回所有的值, 如果是 map, 返回值
         for field in self.fields.values(): 
             media = media + field.widget.media
         return media
+
     media = property(_get_media)
+    # xxx = self.media
 
     def is_multipart(self):
         """
@@ -427,7 +463,9 @@ class Form(six.with_metaclass(DeclarativeFieldsMetaclass, BaseForm)):
 
 @python_2_unicode_compatible
 class BoundField(object):
+
     "A Field plus data"
+
     def __init__(self, form, field, name):
         self.form = form
         self.field = field
@@ -435,10 +473,12 @@ class BoundField(object):
         self.html_name = form.add_prefix(name)
         self.html_initial_name = form.add_initial_prefix(name)
         self.html_initial_id = form.add_initial_prefix(self.auto_id)
-        if self.field.label is None:
+
+        if self.field.label is None: 起个名字
             self.label = pretty_name(name)
         else:
             self.label = self.field.label
+
         self.help_text = field.help_text or ''
 
     def __str__(self):
@@ -469,6 +509,7 @@ class BoundField(object):
         if there are none.
         """
         return self.form.errors.get(self.name, self.form.error_class())
+
     errors = property(_errors)
 
     def as_widget(self, widget=None, attrs=None, only_initial=False):
@@ -495,22 +536,27 @@ class BoundField(object):
         return widget.render(name, self.value(), attrs=attrs)
 
     def as_text(self, attrs=None, **kwargs):
+        textbox
+
         """
         Returns a string of HTML for representing this as an <input type="text">.
         """
         return self.as_widget(TextInput(), attrs, **kwargs)
 
     def as_textarea(self, attrs=None, **kwargs):
+        textarea
         "Returns a string of HTML for representing this as a <textarea>."
         return self.as_widget(Textarea(), attrs, **kwargs)
 
     def as_hidden(self, attrs=None, **kwargs):
+        hidden area
         """
         Returns a string of HTML for representing this as an <input type="hidden">.
         """
         return self.as_widget(self.field.hidden_widget(), attrs, **kwargs)
 
     def _data(self):
+        获取数据
         """
         Returns the data for this BoundField, or None if it wasn't given.
         """
@@ -518,22 +564,26 @@ class BoundField(object):
     data = property(_data)
 
     def value(self):
+        获取 value, 不懂, 这和上面的 _data 有什么不同
         """
         Returns the value for this BoundField, using the initial value if
         the form is not bound or the data otherwise.
         """
         if not self.form.is_bound:
-            data = self.form.initial.get(self.name, self.field.initial)
-            if callable(data):
+            data = self.form.initial.get(self.name, self.field.initial) 初始值
+            if callable(data): 可能里面放着一个函数, 可以获取私有数据
                 data = data()
         else:
             data = self.field.bound_data(
                 self.data, self.form.initial.get(self.name, self.field.initial)
             )
-        return self.field.prepare_value(data)
+
+        return self.field.prepare_value(data) 不懂, 应该是修饰数据
 
     def label_tag(self, contents=None, attrs=None):
         """
+        'mark_safe'd to avoid HTML escaping
+
         Wraps the given contents in a <label>, if the field has an ID attribute.
         contents should be 'mark_safe'd to avoid HTML escaping. If contents
         aren't given, uses the field's HTML-escaped label.
@@ -551,22 +601,31 @@ class BoundField(object):
         return mark_safe(contents)
 
     def css_classes(self, extra_classes=None):
+        我们可以得知, css 和 js 都是归 form 管理的
         """
         Returns a string of space-separated CSS classes for this field.
         """
         if hasattr(extra_classes, 'split'):
             extra_classes = extra_classes.split()
+
         extra_classes = set(extra_classes or [])
+
         if self.errors and hasattr(self.form, 'error_css_class'):
             extra_classes.add(self.form.error_css_class)
+
         if self.field.required and hasattr(self.form, 'required_css_class'):
             extra_classes.add(self.form.required_css_class)
+
         return ' '.join(extra_classes)
 
     def _is_hidden(self):
+        是否隐藏
         "Returns True if this BoundField's widget is hidden."
         return self.field.widget.is_hidden
+
+    这种方法经常用到, 为的就是让内部的属性, 能够像正常名字的方法一样访问, 更友好
     is_hidden = property(_is_hidden)
+
 
     def _auto_id(self):
         """

@@ -5,7 +5,7 @@ class FileProxyMixin(object):
 
         class FileProxy(FileProxyMixin):
             def __init__(self, file):
-                self.file = file
+                self.file = file good
     """
 
     encoding = property(lambda self: self.file.encoding)

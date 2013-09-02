@@ -1,8 +1,9 @@
 "File-based cache backend"
+基于文件的缓存
 
 import hashlib
 import os
-import shutil
+import shutil 删除所有文件
 import time
 try:
     from django.utils.six.moves import cPickle as pickle
@@ -32,13 +33,16 @@ class FileBasedCache(BaseCache):
 
         fname = self._key_to_file(key)
         try:
-            with open(fname, 'rb') as f:
-                exp = pickle.load(f)
+            with open(fname, 'rb') as f: 文件对象
+                exp = pickle.load(f) 获取过期时间
                 now = time.time()
-                if exp < now:
+
+                if exp < now: 已经过期
                     self._delete(fname)
+
                 else:
                     return pickle.load(f)
+
         except (IOError, OSError, EOFError, pickle.PickleError):
             pass
         return default
@@ -88,6 +92,7 @@ class FileBasedCache(BaseCache):
         key = self.make_key(key, version=version)
         self.validate_key(key)
         fname = self._key_to_file(key)
+
         try:
             with open(fname, 'rb') as f:
                 exp = pickle.load(f)
@@ -105,18 +110,18 @@ class FileBasedCache(BaseCache):
             return
 
         try:
-            filelist = sorted(os.listdir(self._dir))
+            filelist = sorted(os.listdir(self._dir))    _dir 记录了目录
         except (IOError, OSError):
             return
 
         if self._cull_frequency == 0:
             doomed = filelist
-        else:
+        else:                                                   返回下标和值
             doomed = [os.path.join(self._dir, k) for (i, k) in enumerate(filelist) if i % self._cull_frequency == 0]
 
         for topdir in doomed:
             try:
-                for root, _, files in os.walk(topdir):
+                for root, _, files in os.walk(topdir): topdir 中的缓存文件全部删除
                     for f in files:
                         self._delete(os.path.join(root, f))
             except (IOError, OSError):
@@ -130,6 +135,7 @@ class FileBasedCache(BaseCache):
 
     def _key_to_file(self, key):
         """
+        filename --> md5
         Convert the filename into an md5 string. We'll turn the first couple
         bits of the path into directory prefixes to be nice to filesystems
         that have problems with large numbers of files in a directory.
@@ -138,7 +144,7 @@ class FileBasedCache(BaseCache):
         ``{cache-dir}ac/bd/18db4cc2f85cedef654fccc4a4d8``.
         """
         path = hashlib.md5(force_bytes(key)).hexdigest()
-        path = os.path.join(path[:2], path[2:4], path[4:])
+        path = os.path.join(path[:2], path[2:4], path[4:]) 有意思
         return os.path.join(self._dir, path)
 
     def _get_num_entries(self):
@@ -146,7 +152,7 @@ class FileBasedCache(BaseCache):
         for _,_,files in os.walk(self._dir):
             count += len(files)
         return count
-    _num_entries = property(_get_num_entries)
+    _num_entries = property(_get_num_entries) 为了方便访问
 
     def clear(self):
         try:

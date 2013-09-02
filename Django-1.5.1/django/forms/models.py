@@ -13,6 +13,7 @@ from django.forms.formsets import BaseFormSet, formset_factory
 from django.forms.util import ErrorList
 from django.forms.widgets import (SelectMultiple, HiddenInput,
     MultipleHiddenInput, media_property)
+
 from django.utils.encoding import smart_text, force_text
 from django.utils.datastructures import SortedDict
 from django.utils import six
@@ -27,7 +28,8 @@ __all__ = (
 
 def construct_instance(form, instance, fields=None, exclude=None):
     """
-    Constructs and returns a model instance from the bound ``form``'s
+    构造返回模板实例
+    Constructs and returns a model instance 模板实例 from the bound ``form``'s
     ``cleaned_data``, but does not save the returned instance to the
     database.
     """
@@ -35,6 +37,7 @@ def construct_instance(form, instance, fields=None, exclude=None):
     opts = instance._meta
 
     cleaned_data = form.cleaned_data
+
     file_field_list = []
     for f in opts.fields:
         if not f.editable or isinstance(f, models.AutoField) \
@@ -44,6 +47,7 @@ def construct_instance(form, instance, fields=None, exclude=None):
             continue
         if exclude and f.name in exclude:
             continue
+
         # Defer saving file-type fields until after the other fields, so a
         # callable upload_to can use the values from other fields.
         if isinstance(f, models.FileField):
@@ -56,9 +60,11 @@ def construct_instance(form, instance, fields=None, exclude=None):
 
     return instance
 
-def save_instance(form, instance, fields=None, fail_message='saved',
-                  commit=True, exclude=None, construct=True):
+
+
+def save_instance(form, instance, fields=None, fail_message='saved',commit=True, exclude=None, construct=True):
     """
+    保存 form 数据到数据库中
     Saves bound Form ``form``'s cleaned_data into model instance ``instance``.
 
     If commit=True, then the changes to ``instance`` will be saved to the
@@ -69,8 +75,9 @@ def save_instance(form, instance, fields=None, fail_message='saved',
     """
     if construct:
         instance = construct_instance(form, instance, fields, exclude)
+
     opts = instance._meta
-    if form.errors:
+    if form.errors: 如果 form 数据中有错误, 将异常
         raise ValueError("The %s could not be %s because the data didn't"
                          " validate." % (opts.object_name, fail_message))
 
@@ -97,6 +104,7 @@ def save_instance(form, instance, fields=None, fail_message='saved',
 
 def model_to_dict(instance, fields=None, exclude=None):
     """
+    将 instance 内的数据处理为 dict
     Returns a dict containing the data in ``instance`` suitable for passing as
     a Form's ``initial`` keyword argument.
 
@@ -111,17 +119,24 @@ def model_to_dict(instance, fields=None, exclude=None):
     from django.db.models.fields.related import ManyToManyField
     opts = instance._meta
     data = {}
+
+    取出各个字段
     for f in opts.fields + opts.many_to_many:
-        if not f.editable:
+        if not f.editable: 不可编辑
             continue
+
         if fields and not f.name in fields:
             continue
+
         if exclude and f.name in exclude:
             continue
         if isinstance(f, ManyToManyField):
+
             # If the object doesn't have a primary key yet, just use an empty
             # list for its m2m fields. Calling f.value_from_object will raise
             # an exception.
+
+            如果是 many_to_many 类型的表, 可能要处理为 list
             if instance.pk is None:
                 data[f.name] = []
             else:
@@ -129,6 +144,12 @@ def model_to_dict(instance, fields=None, exclude=None):
                 data[f.name] = list(f.value_from_object(instance).values_list('pk', flat=True))
         else:
             data[f.name] = f.value_from_object(instance)
+    """
+    data = {
+        "name":"zhangsan",
+        "age":26,
+    }
+    """
     return data
 
 def fields_for_model(model, fields=None, exclude=None, widgets=None, formfield_callback=None):
@@ -150,6 +171,7 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None, formfield_c
     field_list = []
     ignored = []
     opts = model._meta
+
     for f in sorted(opts.fields + opts.many_to_many):
         if not f.editable:
             continue
@@ -157,6 +179,7 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None, formfield_c
             continue
         if exclude and f.name in exclude:
             continue
+
         if widgets and f.name in widgets:
             kwargs = {'widget': widgets[f.name]}
         else:
@@ -164,6 +187,7 @@ def fields_for_model(model, fields=None, exclude=None, widgets=None, formfield_c
 
         if formfield_callback is None:
             formfield = f.formfield(**kwargs)
+
         elif not callable(formfield_callback):
             raise TypeError('formfield_callback must be a function or callable')
         else:
@@ -192,20 +216,26 @@ class ModelFormOptions(object):
 class ModelFormMetaclass(type):
     def __new__(cls, name, bases, attrs):
         formfield_callback = attrs.pop('formfield_callback', None)
+
         try:
             parents = [b for b in bases if issubclass(b, ModelForm)]
         except NameError:
             # We are defining ModelForm itself.
             parents = None
+
+        #attrs 里有 fields
         declared_fields = get_declared_fields(bases, attrs, False)
         new_class = super(ModelFormMetaclass, cls).__new__(cls, name, bases,
                 attrs)
+
         if not parents:
             return new_class
 
         if 'media' not in attrs:
             new_class.media = media_property(new_class)
+
         opts = new_class._meta = ModelFormOptions(getattr(new_class, 'Meta', None))
+
         if opts.model:
             # If a model is defined, extract form fields from it.
             fields = fields_for_model(opts.model, opts.fields,
@@ -228,37 +258,49 @@ class ModelFormMetaclass(type):
         new_class.base_fields = fields
         return new_class
 
+BaseModelForm 也是 BaseForm
 class BaseModelForm(BaseForm):
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  initial=None, error_class=ErrorList, label_suffix=':',
                  empty_permitted=False, instance=None):
-        opts = self._meta
+
+        opts = self._meta 不懂
+
         if instance is None:
             if opts.model is None:
-                raise ValueError('ModelForm has no model class specified.')
+                raise ValueError('ModelForm has no model class specified.') 
+                看, 必须要有个一个 model class 指定, 才能制造出对应的 form
+
+            如果  opts.model 被设置了, 我们可以实例化一个 model instance
             # if we didn't get an instance, instantiate a new one
             self.instance = opts.model()
-            object_data = {}
+
+            从这里可以看出, 如果没有设置 instance 将会导致 object_data 为空
+            object_data = {} 
         else:
-            self.instance = instance
+            如果已经指定 instance
+            self.instance = instance 
             object_data = model_to_dict(instance, opts.fields, opts.exclude)
+
         # if initial was provided, it should override the values from instance
         if initial is not None:
-            object_data.update(initial)
+            object_data.update(initial) 看, object_data 就是 initial 初始值, 提供给 BaseForm
+
         # self._validate_unique will be set to True by BaseModelForm.clean().
         # It is False by default so overriding self.clean() and failing to call
         # super will stop validate_unique from being called.
-        self._validate_unique = False
+        self._validate_unique = False                                       
         super(BaseModelForm, self).__init__(data, files, auto_id, prefix, object_data,
                                             error_class, label_suffix, empty_permitted)
 
     def _update_errors(self, message_dict):
-        for k, v in message_dict.items():
+        for k, v in message_dict.items(): 遍历
             if k != NON_FIELD_ERRORS:
                 self._errors.setdefault(k, self.error_class()).extend(v)
                 # Remove the data from the cleaned_data dict since it was invalid
                 if k in self.cleaned_data:
                     del self.cleaned_data[k]
+
         if NON_FIELD_ERRORS in message_dict:
             messages = message_dict[NON_FIELD_ERRORS]
             self._errors.setdefault(NON_FIELD_ERRORS, self.error_class()).extend(messages)
@@ -266,7 +308,9 @@ class BaseModelForm(BaseForm):
     def _get_validation_exclusions(self):
         """
         For backwards-compatibility, several types of fields need to be
-        excluded from model validation. See the following tickets for
+        excluded from model validation. 为了向后兼容, 可能要忽略某些字段, 不懂
+
+        See the following tickets for
         details: #12507, #12521, #12553
         """
         exclude = []
@@ -276,6 +320,8 @@ class BaseModelForm(BaseForm):
             field = f.name
             # Exclude fields that aren't on the form. The developer may be
             # adding these values to the model after form validation.
+
+            不在 self.fields 中的将被驱逐
             if field not in self.fields:
                 exclude.append(f.name)
 
@@ -284,6 +330,7 @@ class BaseModelForm(BaseForm):
             # class. See #12901.
             elif self._meta.fields and field not in self._meta.fields:
                 exclude.append(f.name)
+
             elif self._meta.exclude and field in self._meta.exclude:
                 exclude.append(f.name)
 
@@ -298,11 +345,13 @@ class BaseModelForm(BaseForm):
             # validation if the model field allows blanks. If it does, the blank
             # value may be included in a unique check, so cannot be excluded
             # from validation.
+
             else:
                 form_field = self.fields[field]
                 field_value = self.cleaned_data.get(field, None)
                 if not f.blank and not form_field.required and field_value in EMPTY_VALUES:
                     exclude.append(f.name)
+
         return exclude
 
     def clean(self):
@@ -324,12 +373,12 @@ class BaseModelForm(BaseForm):
         # However, these fields *must* be included in uniqueness checks,
         # so this can't be part of _get_validation_exclusions().
         for f_name, field in self.fields.items():
-            if isinstance(field, InlineForeignKeyField):
+            if isinstance(field, InlineForeignKeyField): 内联的 foreign key 将被驱逐
                 exclude.append(f_name)
 
         # Clean the model instance's fields.
         try:
-            self.instance.clean_fields(exclude=exclude)
+            self.instance.clean_fields(exclude=exclude) #Model 内部的方法
         except ValidationError as e:
             self._update_errors(e.message_dict)
 
@@ -348,7 +397,7 @@ class BaseModelForm(BaseForm):
         Calls the instance's validate_unique() method and updates the form's
         validation errors if any were raised.
         """
-        exclude = self._get_validation_exclusions()
+        exclude = self._get_validation_exclusions()#Model 内部的方法
         try:
             self.instance.validate_unique(exclude=exclude)
         except ValidationError as e:
@@ -356,6 +405,7 @@ class BaseModelForm(BaseForm):
 
     def save(self, commit=True):
         """
+        保存 form 中的数据到 db 中
         Saves this ``form``'s cleaned_data into model instance
         ``self.instance``.
 
@@ -366,17 +416,19 @@ class BaseModelForm(BaseForm):
             fail_message = 'created'
         else:
             fail_message = 'changed'
+
         return save_instance(self, self.instance, self._meta.fields,
                              fail_message, commit, construct=False)
 
     save.alters_data = True
 
+继承ModelFormMetaclass, BaseModelForm, 但什么都不做
 class ModelForm(six.with_metaclass(ModelFormMetaclass, BaseModelForm)):
     pass
 
-def modelform_factory(model, form=ModelForm, fields=None, exclude=None,
-                      formfield_callback=None,  widgets=None):
+def modelform_factory(model, form=ModelForm, fields=None, exclude=None,formfield_callback=None,  widgets=None):
     """
+    返回模板表单, 根据模板推算名字, 返回新的类
     Returns a ModelForm containing form fields for the given model.
 
     ``fields`` is an optional list of field names. If provided, only the named
@@ -397,10 +449,13 @@ def modelform_factory(model, form=ModelForm, fields=None, exclude=None,
 
     # Build up a list of attributes that the Meta object will have.
     attrs = {'model': model}
+
     if fields is not None:
         attrs['fields'] = fields
+
     if exclude is not None:
         attrs['exclude'] = exclude
+        
     if widgets is not None:
         attrs['widgets'] = widgets
 
@@ -421,8 +476,7 @@ def modelform_factory(model, form=ModelForm, fields=None, exclude=None,
     }
 
     # Instatiate type(form) in order to use the same metaclass as form.
-    return type(form)(class_name, (form,), form_class_attrs)
-
+    return type(form)(class_name, (form,), form_class_attrs) 语法不懂, 返回一个新的类
 
 # ModelFormSets ##############################################################
 
@@ -434,7 +488,9 @@ class BaseModelFormSet(BaseFormSet):
 
     def __init__(self, data=None, files=None, auto_id='id_%s', prefix=None,
                  queryset=None, **kwargs):
+        #看, 可以根据一个查询集来构造一个form
         self.queryset = queryset
+
         self.initial_extra = kwargs.pop('initial', None)
         defaults = {'data': data, 'files': files, 'auto_id': auto_id, 'prefix': prefix}
         defaults.update(kwargs)
@@ -447,7 +503,7 @@ class BaseModelFormSet(BaseFormSet):
         return super(BaseModelFormSet, self).initial_form_count()
 
     def _existing_object(self, pk):
-        if not hasattr(self, '_object_dict'):
+        if not hasattr(self, '_object_dict'): 构造一个 self.object_dict
             self._object_dict = dict([(o.pk, o) for o in self.get_queryset()])
         return self._object_dict.get(pk)
 
@@ -456,22 +512,29 @@ class BaseModelFormSet(BaseFormSet):
             # Import goes here instead of module-level because importing
             # django.db has side effects.
             from django.db import connections
+
             pk_key = "%s-%s" % (self.add_prefix(i), self.model._meta.pk.name)
             pk = self.data[pk_key]
             pk_field = self.model._meta.pk
             pk = pk_field.get_db_prep_lookup('exact', pk,
                 connection=connections[self.get_queryset().db])
+
             if isinstance(pk, list):
-                pk = pk[0]
+                pk = pk[0] 只取第一个
+
             kwargs['instance'] = self._existing_object(pk)
+
         if i < self.initial_form_count() and not kwargs.get('instance'):
             kwargs['instance'] = self.get_queryset()[i]
+            
         if i >= self.initial_form_count() and self.initial_extra:
             # Set initial values for extra forms
             try:
                 kwargs['initial'] = self.initial_extra[i-self.initial_form_count()]
             except IndexError:
                 pass
+
+        调用父类的 _construct_form 方法
         return super(BaseModelFormSet, self)._construct_form(i, **kwargs)
 
     def get_queryset(self):
@@ -491,11 +554,12 @@ class BaseModelFormSet(BaseFormSet):
             # on django-dev, max_num should not prevent existing
             # related objects/inlines from being displayed.
             self._queryset = qs
+
         return self._queryset
 
     def save_new(self, form, commit=True):
         """Saves and returns a new model instance for the given form."""
-        return form.save(commit=commit)
+        return form.save(commit=commit) BaseForm.save
 
     def save_existing(self, form, instance, commit=True):
         """Saves and returns an existing model instance for the given form."""
@@ -507,9 +571,11 @@ class BaseModelFormSet(BaseFormSet):
         """
         if not commit:
             self.saved_forms = []
+
             def save_m2m():
                 for form in self.saved_forms:
                     form.save_m2m()
+
             self.save_m2m = save_m2m
         return self.save_existing_objects(commit) + self.save_new_objects(commit)
 
@@ -520,24 +586,30 @@ class BaseModelFormSet(BaseFormSet):
         # Collect unique_checks and date_checks to run from all the forms.
         all_unique_checks = set()
         all_date_checks = set()
+
+        收集每个 form 的字段
         for form in self.forms:
             if not form.is_valid():
                 continue
             exclude = form._get_validation_exclusions()
-            unique_checks, date_checks = form.instance._get_unique_checks(exclude=exclude)
+            unique_checks, date_checks = form.instance._get_unique_checks(exclude=exclude) 收集需要检查唯一性的字段
             all_unique_checks = all_unique_checks.union(set(unique_checks))
             all_date_checks = all_date_checks.union(set(date_checks))
 
         errors = []
+
         # Do each of the unique checks (unique and unique_together)
         for uclass, unique_check in all_unique_checks:
             seen_data = set()
+
             for form in self.forms:
                 if not form.is_valid():
                     continue
+
                 # get data for each field of each of unique_check
                 row_data = tuple([form.cleaned_data[field] for field in unique_check if field in form.cleaned_data])
-                if row_data and not None in row_data:
+
+                if row_data and not None in row_data: 如果有需要将进行检测
                     # if we've already seen it then we have a uniqueness failure
                     if row_data in seen_data:
                         # poke error messages into the right places and mark
@@ -545,21 +617,26 @@ class BaseModelFormSet(BaseFormSet):
                         errors.append(self.get_unique_error_message(unique_check))
                         form._errors[NON_FIELD_ERRORS] = self.error_class([self.get_form_error()])
                         # remove the data from the cleaned_data dict since it was invalid
+
                         for field in unique_check:
                             if field in form.cleaned_data:
                                 del form.cleaned_data[field]
+
                     # mark the data as seen
                     seen_data.add(row_data)
+
         # iterate over each of the date checks now
         for date_check in all_date_checks:
             seen_data = set()
             uclass, lookup, field, unique_for = date_check
+
             for form in self.forms:
                 if not form.is_valid():
                     continue
+
                 # see if we have data for both fields
                 if (form.cleaned_data and form.cleaned_data[field] is not None
-                    and form.cleaned_data[unique_for] is not None):
+                    and form.cleaned_data[unique_for] is not None):  如果有需要将进行检测
                     # if it's a date lookup we need to get the data for all the fields
                     if lookup == 'date':
                         date = form.cleaned_data[unique_for]
@@ -569,6 +646,7 @@ class BaseModelFormSet(BaseFormSet):
                     else:
                         date_data = (getattr(form.cleaned_data[unique_for], lookup),)
                     data = (form.cleaned_data[field],) + date_data
+
                     # if we've already seen it then we have a uniqueness failure
                     if data in seen_data:
                         # poke error messages into the right places and mark

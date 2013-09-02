@@ -1,5 +1,6 @@
 """
 Portable file locking utilities.
+便携文件锁工具
 
 Based partially on example by Jonathan Feignberg <jdf@pobox.com> in the Python
 Cookbook, licensed under the Python Software License.
@@ -41,8 +42,9 @@ except (ImportError, AttributeError):
 
 def fd(f):
     """Get a filedescriptor from something which could be a file or an fd."""
-    return hasattr(f, 'fileno') and f.fileno() or f
+    return hasattr(f, 'fileno') and f.fileno() or f 文件描述符
 
+文件锁函数
 if system_type == 'nt':
     def lock(file, flags):
         hfile = win32file._get_osfhandle(fd(file))
@@ -51,6 +53,7 @@ if system_type == 'nt':
     def unlock(file):
         hfile = win32file._get_osfhandle(fd(file))
         win32file.UnlockFileEx(hfile, 0, -0x10000, __overlapped)
+
 elif system_type == 'posix':
     def lock(file, flags):
         fcntl.lockf(fd(file), flags)

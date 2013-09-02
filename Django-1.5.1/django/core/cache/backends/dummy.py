@@ -1,5 +1,5 @@
 "Dummy cache backend"
-
+什么都不干, 向后兼容所用??
 from django.core.cache.backends.base import BaseCache
 
 class DummyCache(BaseCache):

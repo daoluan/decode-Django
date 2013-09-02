@@ -16,7 +16,9 @@ class File(FileProxyMixin):
         self.file = file
         if name is None:
             name = getattr(file, 'name', None)
+
         self.name = name
+
         if hasattr(file, 'mode'):
             self.mode = file.mode
 
@@ -37,10 +39,14 @@ class File(FileProxyMixin):
 
     def _get_size(self):
         if not hasattr(self, '_size'):
+
+            提供三种方法得到文件大小, 并设置
             if hasattr(self.file, 'size'):
                 self._size = self.file.size
+
             elif hasattr(self.file, 'name') and os.path.exists(self.file.name):
                 self._size = os.path.getsize(self.file.name)
+
             elif hasattr(self.file, 'tell') and hasattr(self.file, 'seek'):
                 pos = self.file.tell()
                 self.file.seek(0, os.SEEK_END)
@@ -48,12 +54,13 @@ class File(FileProxyMixin):
                 self.file.seek(pos)
             else:
                 raise AttributeError("Unable to determine the file's size.")
+
         return self._size
 
     def _set_size(self, size):
         self._size = size
 
-    size = property(_get_size, _set_size)
+    size = property(_get_size, _set_size) 方便
 
     def _get_closed(self):
         return not self.file or self.file.closed
@@ -61,6 +68,7 @@ class File(FileProxyMixin):
 
     def chunks(self, chunk_size=None):
         """
+        读取文件, 依次返回数据块
         Read the file and yield chucks of ``chunk_size`` bytes (defaults to
         ``UploadedFile.DEFAULT_CHUNK_SIZE``).
         """
@@ -107,19 +115,21 @@ class File(FileProxyMixin):
                     yield line
                 else:
                     buffer_ = line
+                每次都返回一行
 
         if buffer_ is not None:
             yield buffer_
+            最后返回剩下的
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_value, tb):
-        self.close()
+        self.close() 实际上关闭文件
 
     def open(self, mode=None):
         if not self.closed:
-            self.seek(0)
+            self.seek(0) 如果没有关闭, 调整指针
         elif self.name and os.path.exists(self.name):
             self.file = open(self.name, mode or self.mode)
         else:
@@ -131,14 +141,17 @@ class File(FileProxyMixin):
 @python_2_unicode_compatible
 class ContentFile(File):
     """
-    A File-like object that takes just raw content, rather than an actual file.
+    非真正文件, 只是包含文件内容
+    A File-like object that takes just raw content, rather than an actual file. 
     """
     def __init__(self, content, name=None):
         if six.PY3:
             stream_class = StringIO if isinstance(content, six.text_type) else BytesIO
         else:
             stream_class = BytesIO
+
             content = force_bytes(content)
+            
         super(ContentFile, self).__init__(stream_class(content), name=name)
         self.size = len(content)
 

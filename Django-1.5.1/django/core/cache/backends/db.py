@@ -1,4 +1,6 @@
 "Database cache backend."
+基于数据库的缓存
+
 import base64
 import time
 from datetime import datetime
@@ -31,14 +33,15 @@ class Options(object):
         self.managed = True
         self.proxy = False
 
-class BaseDatabaseCache(BaseCache):
+class BaseDatabaseCache(BaseCache): 多了一个 table
     def __init__(self, table, params):
         BaseCache.__init__(self, params)
         self._table = table
 
         class CacheEntry(object):
             _meta = Options(table)
-        self.cache_model_class = CacheEntry
+
+        self.cache_model_class = CacheEntry 缓存模块类
 
 class DatabaseCache(BaseDatabaseCache):
 
@@ -48,32 +51,44 @@ class DatabaseCache(BaseDatabaseCache):
     # of "now" respectively.
 
     # But it bypasses the ORM for write operations. As a consequence, aware
-    # datetimes aren't made naive for databases that don't support time zones.
+    # datetimes aren't made naive for databases that don't support time zones. 市区
+
     # We work around this problem by always using naive datetimes when writing
-    # expiration values, in UTC when USE_TZ = True and in local time otherwise.
+    # expiration values 过期值, in UTC when USE_TZ = True and in local time otherwise.
 
     def get(self, key, default=None, version=None):
         key = self.make_key(key, version=version)
         self.validate_key(key)
+
+        self.cache_model_class 不懂
         db = router.db_for_read(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
-        cursor = connections[db].cursor()
+        cursor = connections[db].cursor() 游标
 
         cursor.execute("SELECT cache_key, value, expires FROM %s "
-                       "WHERE cache_key = %%s" % table, [key])
-        row = cursor.fetchone()
-        if row is None:
+                       "WHERE cache_key = %%s" % table, [key]) table
+
+        row = cursor.fetchone() 取一个
+
+        if row is None: 空集
             return default
+
         now = timezone.now()
-        if row[2] < now:
+
+        row[2] 是时间
+        if row[2] < now: 事件比较新
             db = router.db_for_write(self.cache_model_class)
             cursor = connections[db].cursor()
+
             cursor.execute("DELETE FROM %s "
                            "WHERE cache_key = %%s" % table, [key])
-            transaction.commit_unless_managed(using=db)
+
+            transaction.commit_unless_managed(using=db) 事务
+
             return default
+
         value = connections[db].ops.process_clob(row[1])
-        return pickle.loads(base64.b64decode(force_bytes(value)))
+        return pickle.loads(base64.b64decode(force_bytes(value))) base64 编码
 
     def set(self, key, value, timeout=None, version=None):
         key = self.make_key(key, version=version)
@@ -86,23 +101,32 @@ class DatabaseCache(BaseDatabaseCache):
         return self._base_set('add', key, value, timeout)
 
     def _base_set(self, mode, key, value, timeout=None):
-        if timeout is None:
+
+        if timeout is None: timeout 是超时的时间, 过了这个时间, 就没有效果了
             timeout = self.default_timeout
+
+                    db_for_read?
         db = router.db_for_write(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
         cursor = connections[db].cursor()
 
         cursor.execute("SELECT COUNT(*) FROM %s" % table)
+
         num = cursor.fetchone()[0]
         now = timezone.now()
         now = now.replace(microsecond=0)
-        if settings.USE_TZ:
-            exp = datetime.utcfromtimestamp(time.time() + timeout)
+
+        if settings.USE_TZ: #use timezone
+            exp = datetime.utcfromtimestamp(time.time() + timeout) 
         else:
             exp = datetime.fromtimestamp(time.time() + timeout)
+
         exp = exp.replace(microsecond=0)
+
+        最大条目
         if num > self._max_entries:
             self._cull(db, cursor, now)
+
         pickled = pickle.dumps(value, pickle.HIGHEST_PROTOCOL)
         b64encoded = base64.b64encode(pickled)
         # The DB column is expecting a string, so make sure the value is a
@@ -111,14 +135,15 @@ class DatabaseCache(BaseDatabaseCache):
             b64encoded = b64encoded.decode('latin1')
         cursor.execute("SELECT cache_key, expires FROM %s "
                        "WHERE cache_key = %%s" % table, [key])
+
         try:
             result = cursor.fetchone()
             if result and (mode == 'set' or
-                    (mode == 'add' and result[1] < now)):
+                    (mode == 'add' and result[1] < now)): 更新 result[1] < now 表示超时
                 cursor.execute("UPDATE %s SET value = %%s, expires = %%s "
                                "WHERE cache_key = %%s" % table,
                                [b64encoded, connections[db].ops.value_to_db_datetime(exp), key])
-            else:
+            else: 没有条目, 可能需要更新
                 cursor.execute("INSERT INTO %s (cache_key, value, expires) "
                                "VALUES (%%s, %%s, %%s)" % table,
                                [key, b64encoded, connections[db].ops.value_to_db_datetime(exp)])
@@ -166,11 +191,16 @@ class DatabaseCache(BaseDatabaseCache):
             # When USE_TZ is True, 'now' will be an aware datetime in UTC.
             now = now.replace(tzinfo=None)
             table = connections[db].ops.quote_name(self._table)
+
+            删除超时的记录
             cursor.execute("DELETE FROM %s WHERE expires < %%s" % table,
                            [connections[db].ops.value_to_db_datetime(now)])
+
             cursor.execute("SELECT COUNT(*) FROM %s" % table)
             num = cursor.fetchone()[0]
-            if num > self._max_entries:
+
+            如果没有超时的记录
+            if num > self._max_entries: 
                 cull_num = num // self._cull_frequency
                 cursor.execute(
                     connections[db].ops.cache_key_culling_sql() % table,
@@ -178,7 +208,7 @@ class DatabaseCache(BaseDatabaseCache):
                 cursor.execute("DELETE FROM %s "
                                "WHERE cache_key < %%s" % table,
                                [cursor.fetchone()[0]])
-
+                
     def clear(self):
         db = router.db_for_write(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
