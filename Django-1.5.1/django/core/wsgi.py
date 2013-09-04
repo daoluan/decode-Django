@@ -10,4 +10,8 @@ def get_wsgi_application():
     case the internal WSGI implementation changes or moves in the future.
 
     """
+    """
+    # 继承, 但只实现了 __call__ 方法, 方便使用
+    class WSGIHandler(base.BaseHandler):
+    """
     return WSGIHandler()

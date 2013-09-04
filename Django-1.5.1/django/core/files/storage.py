@@ -17,6 +17,7 @@ from django.utils.importlib import import_module
 from django.utils.text import get_valid_filename
 from django.utils._os import safe_join, abspathu
 
+应该是用于文件上传存储
 
 __all__ = ('Storage', 'FileSystemStorage', 'DefaultStorage', 'default_storage')
 
@@ -81,6 +82,7 @@ class Storage(object):
         Returns a local filesystem path where the file can be retrieved using
         Python's built-in open() function. Storage systems that can't be
         accessed using open() should *not* implement this method.
+        返回本地文件
         """
         raise NotImplementedError("This backend doesn't support absolute paths.")
 
@@ -148,7 +150,7 @@ class FileSystemStorage(Storage):
 
     def __init__(self, location=None, base_url=None):
         if location is None:
-            location = settings.MEDIA_ROOT
+            location = settings.MEDIA_ROOT 默认是 media_root zhi指定的路径
         self.base_location = location
         self.location = abspathu(self.base_location)
         if base_url is None:
@@ -166,12 +168,14 @@ class FileSystemStorage(Storage):
         # if os.makedirs fails with EEXIST, the directory was created
         # concurrently, and we can continue normally. Refs #16082.
         directory = os.path.dirname(full_path)
+
         if not os.path.exists(directory):
             try:
                 os.makedirs(directory)
             except OSError as e:
                 if e.errno != errno.EEXIST:
                     raise
+
         if not os.path.isdir(directory):
             raise IOError("%s exists and is not a directory." % directory)
 

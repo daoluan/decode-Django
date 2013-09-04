@@ -182,7 +182,7 @@ class UserSettingsHolder(BaseSettings):
     """
     Holder for user configured settings. 为用户配备的设置
     """
-    # SETTINGS_MODULE doesn't make much sense in the manually configured 
+    # SETTINGS_MODULE doesn't make much sense in the manually configured
     # (standalone) case.
     SETTINGS_MODULE 意义不大
     SETTINGS_MODULE = None
@@ -211,7 +211,7 @@ class UserSettingsHolder(BaseSettings):
     def __dir__(self):
         return list(self.__dict__) + dir(self.default_settings)
 
-settings = LazySettings()
+settings = LazySettings() 这里已经设置了 settings
 
 
 

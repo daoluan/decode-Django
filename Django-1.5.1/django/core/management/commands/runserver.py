@@ -34,6 +34,7 @@ class Command(BaseCommand):
     requires_model_validation = False
 
     def get_handler(self, *args, **options):
+        # 获取内部的 WSGIhandler
         """
         Returns the default WSGI handler for the runner.
         """

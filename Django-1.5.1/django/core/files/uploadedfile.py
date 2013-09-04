@@ -2,6 +2,8 @@
 Classes representing uploaded files.
 """
 
+上传文件对象
+
 import os
 from io import BytesIO
 
@@ -13,12 +15,12 @@ from django.utils.encoding import force_str
 __all__ = ('UploadedFile', 'TemporaryUploadedFile', 'InMemoryUploadedFile',
            'SimpleUploadedFile')
 
-class UploadedFile(File):
+class UploadedFile(File): 
     """
     A abstract uploaded file (``TemporaryUploadedFile`` and
     ``InMemoryUploadedFile`` are the built-in concrete subclasses).
 
-    An ``UploadedFile`` object behaves somewhat like a file object and
+    An ``UploadedFile`` object behaves somewhat like a file object 和一般文件有点像, 可能不是文件对象 and
     represents some file data that the user submitted with a form.
     """
     DEFAULT_CHUNK_SIZE = 64 * 2**10
@@ -56,7 +58,7 @@ class TemporaryUploadedFile(UploadedFile):
     A file uploaded to a temporary location (i.e. stream-to-disk).
     """
     def __init__(self, name, content_type, size, charset):
-        if settings.FILE_UPLOAD_TEMP_DIR:
+        if settings.FILE_UPLOAD_TEMP_DIR: 在 settings 中可以设置临时文件的路径
             file = tempfile.NamedTemporaryFile(suffix='.upload',
                 dir=settings.FILE_UPLOAD_TEMP_DIR)
         else:

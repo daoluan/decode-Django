@@ -17,10 +17,11 @@ from django import get_version
 
 # A cache of loaded commands, so that call_command
 # doesn't have to reload every time it's called.
-_commands = None
+_commands = None #先缓冲一个命令, 不用每次都构建
 
 def find_commands(management_dir):
     """
+    命令管理的目录, 得到所有的命令
     Given a path to a management directory, returns a list of all the command
     names that are available.
 
@@ -35,6 +36,7 @@ def find_commands(management_dir):
 
 def find_management_module(app_name):
     """
+    根据 app_name 返回里面所包含的 management module 路径
     Determines the path to the management module for the given app_name,
     without actually importing the application or the management module.
 
@@ -74,6 +76,8 @@ def load_command_class(app_name, name):
     class instance. All errors raised by the import process
     (ImportError, AttributeError) are allowed to propagate.
     """
+    # 项目中直接导入:
+    # import django.management.commands.runserver
     module = import_module('%s.management.commands.%s' % (app_name, name))
     return module.Command()
 
@@ -99,20 +103,25 @@ def get_commands():
     The dictionary is cached on the first call and reused on subsequent
     calls.
     """
-    global _commands
+    global _commands 全局
     if _commands is None:
+        # __path__ 一般包含了当前的路径: http://www.cnblogs.com/no13bus/archive/2013/03/14/2958618.html
+        # __path__ 可以做为包内的搜索路径的更变
+                        # {name:app_name}
         _commands = dict([(name, 'django.core') for name in find_commands(__path__[0])])
 
         # Find the installed apps
         from django.conf import settings
+
         try:
-            apps = settings.INSTALLED_APPS
+            apps = settings.INSTALLED_APPS # 默认是为空的
         except ImproperlyConfigured:
             # Still useful for commands that do not require functional settings,
             # like startproject or help
             apps = []
 
         # Find and load the management module for each installed app.
+        # 不懂, 每个 app 都有自己的 management
         for app_name in apps:
             try:
                 path = find_management_module(app_name)
@@ -125,6 +134,7 @@ def get_commands():
 
 def call_command(name, *args, **options):
     """
+    命令执行的入口
     Calls the given command, with the given options and args/kwargs.
 
     This is the primary API you should use for calling specific commands.
@@ -144,12 +154,13 @@ def call_command(name, *args, **options):
         # If the command is already loaded, use it directly.
         klass = app_name
     else:
-        klass = load_command_class(app_name, name)
+        klass = load_command_class(app_name, name) # 如果没有被加载, 需要导入并返回 command 类
 
     # Grab out a list of defaults from the options. optparse does this for us
     # when the script runs from the command line, but since call_command can
     # be called programatically, we need to simulate the loading and handling
     # of defaults (see #10080 for details).
+
     defaults = {}
     for opt in klass.option_list:
         if opt.default is NO_DEFAULT:
@@ -200,11 +211,13 @@ class LaxOptionParser(OptionParser):
                     # process a single long option (possibly with value(s))
                     # the superclass code pops the arg off rargs
                     self._process_long_opt(rargs, values)
+
                 elif arg[:1] == "-" and len(arg) > 1:
                     # process a cluster of short options (possibly with
                     # value(s) for the last one only)
                     # the superclass code pops the arg off rargs
                     self._process_short_opts(rargs, values)
+
                 else:
                     # it's either a non-default option or an arg
                     # either way, add it to the args list so we can keep
@@ -222,8 +235,8 @@ class ManagementUtility(object):
     by editing the self.commands dictionary.
     """
     def __init__(self, argv=None):
-        self.argv = argv or sys.argv[:]
-        self.prog_name = os.path.basename(self.argv[0])
+        self.argv = argv or sys.argv[:]                 提取参数
+        self.prog_name = os.path.basename(self.argv[0]) 脚本本身, 是 dj_andmin 或者 manage.py
 
     def main_help_text(self, commands_only=False):
         """
@@ -239,18 +252,23 @@ class ManagementUtility(object):
                 "Available subcommands:",
             ]
             commands_dict = collections.defaultdict(lambda: [])
+
             for name, app in six.iteritems(get_commands()):
                 if app == 'django.core':
                     app = 'django'
                 else:
                     app = app.rpartition('.')[-1]
+
                 commands_dict[app].append(name)
+
             style = color_style()
+
             for app in sorted(commands_dict.keys()):
                 usage.append("")
                 usage.append(style.NOTICE("[%s]" % app))
                 for name in sorted(commands_dict[app]):
                     usage.append("    %s" % name)
+
         return '\n'.join(usage)
 
     def fetch_command(self, subcommand):
@@ -311,6 +329,7 @@ class ManagementUtility(object):
         # subcommand
         if cword == 1:
             print(' '.join(sorted(filter(lambda x: x.startswith(curr), subcommands))))
+
         # subcommand options
         # special case: the 'help' subcommand has no options
         elif cwords[0] in subcommands and cwords[0] != 'help':
@@ -320,7 +339,8 @@ class ManagementUtility(object):
             if cwords[0] == 'runfcgi':
                 from django.core.servers.fastcgi import FASTCGI_OPTIONS
                 options += [(k, 1) for k in FASTCGI_OPTIONS]
-            # special case: add the names of installed apps to options
+
+            # special case: add the names of installed apps to options 特殊处理, 这些命令需要返回已经安装的 app
             elif cwords[0] in ('dumpdata', 'sql', 'sqlall', 'sqlclear',
                     'sqlcustom', 'sqlindexes', 'sqlsequencereset', 'test'):
                 try:
@@ -331,8 +351,11 @@ class ManagementUtility(object):
                     # Fail silently if DJANGO_SETTINGS_MODULE isn't set. The
                     # user will find out once they execute the command.
                     pass
+
+            # option_list
             options += [(s_opt.get_opt_string(), s_opt.nargs) for s_opt in
                         subcommand_cls.option_list]
+
             # filter out previously specified options from available options
             prev_opts = [x.split('=')[0] for x in cwords[1:cword-1]]
             options = [opt for opt in options if opt[0] not in prev_opts]
@@ -360,39 +383,49 @@ class ManagementUtility(object):
                                  option_list=BaseCommand.option_list)
         self.autocomplete()
         try:
+            # 预处理某些选项, 这些不属于子命令
+            # %prog subcommand [options] [args] 分析脚本的参数, 为的是提取出
+            # x.py subcommand --setting xxx 中的 --setting xxx, 必须提前处理
+            # 在 BaseCommand 中就有 --settings 和 --pythonpath 选项.
             options, args = parser.parse_args(self.argv)
             handle_default_options(options)
         except:
             pass # Ignore any option errors at this point.
 
         try:
-            subcommand = self.argv[1]
+            # argv[0] 是脚本名, argv[1] 是子命令
+            subcommand = self.argv[1] 命令
         except IndexError:
             subcommand = 'help' # Display help if no arguments were given.
 
         if subcommand == 'help':
-            if len(args) <= 2:
+            if len(args) <= 2: # 直接返回 x.py 对应的帮助文档
                 parser.print_lax_help()
                 sys.stdout.write(self.main_help_text() + '\n')
-            elif args[2] == '--commands':
+
+            elif args[2] == '--commands': # 只返回所有的命令
                 sys.stdout.write(self.main_help_text(commands_only=True) + '\n')
             else:
                 self.fetch_command(args[2]).print_help(self.prog_name, args[2])
+
         elif subcommand == 'version':
             sys.stdout.write(parser.get_version() + '\n')
+
         # Special-cases: We want 'django-admin.py --version' and
-        # 'django-admin.py --help' to work, for backwards compatibility.
+        # 'django-admin.py --help' to work, for backwards compatibility. 向后兼容
         elif self.argv[1:] == ['--version']:
             # LaxOptionParser already takes care of printing the version.
             pass
+
         elif self.argv[1:] in (['--help'], ['-h']):
             parser.print_lax_help()
             sys.stdout.write(self.main_help_text() + '\n')
         else:
-            self.fetch_command(subcommand).run_from_argv(self.argv)
+            self.fetch_command(subcommand).run_from_argv(self.argv) # 所有的命令调用都从 run_from_argv()
 
 def setup_environ(settings_mod, original_settings_path=None):
     """
+    deprecated
     Configures the runtime environment. This can also be used by external
     scripts wanting to set up a similar environment to manage.py.
     Returns the project directory (assuming the passed settings module is
@@ -454,6 +487,7 @@ def execute_from_command_line(argv=None):
 
 def execute_manager(settings_mod, argv=None):
     """
+    deprecated
     Like execute_from_command_line(), but for use by manage.py, a
     project-specific django-admin.py utility.
     """
@@ -467,3 +501,28 @@ def execute_manager(settings_mod, argv=None):
     setup_environ(settings_mod)
     utility = ManagementUtility(argv)
     utility.execute()
+
+# 这是 manage.py 中的代码, 有线索: 这就是调用了 excute_from_command_line
+"""
+import os
+import sys
+
+if __name__ == "__main__":
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tomato.settings")
+
+    from django.core.management import execute_from_command_line
+
+    execute_from_command_line(sys.argv)
+"""
+
+# dj_andmin.py 的就更简单了:
+"""
+#!/usr/bin/env python
+from django.core import management
+
+if __name__ == "__main__":
+    management.execute_from_command_line()
+"""
+
+区别在于: manage.py 会更有针对性, 因为从上面可以看出, 它导入了具体项目的 settings, 而 dj_andmin.py 却没有.
+所以在尚未有项目存在的时候, 更多的使用 dj_andmin.py 脚本; 否则更多的使用 manage.py

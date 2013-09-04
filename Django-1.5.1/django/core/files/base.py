@@ -81,7 +81,7 @@ class File(FileProxyMixin):
             pass
 
         while True:
-            data = self.read(chunk_size)
+            data = self.read(chunk_size) 不懂，根本没有read 方法，子类实现
             if not data:
                 break
             yield data

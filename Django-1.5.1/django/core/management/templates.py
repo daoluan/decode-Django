@@ -30,7 +30,9 @@ _url_drive_re = re.compile('^([a-z])[:|]', re.I)
 
 class TemplateCommand(BaseCommand):
     """
-    Copies either a Django application layout template or a Django project
+    Copies either
+        a Django application layout template or  app 模版
+        a Django project                         django 项目模版
     layout template into the specified directory.
 
     :param style: A color style object (see django.core.management.color).
@@ -40,25 +42,47 @@ class TemplateCommand(BaseCommand):
     :param options: The additional variables passed to project or app templates
     """
     args = "[name] [optional destination directory]"
+
     option_list = BaseCommand.option_list + (
+
+        # 可以制定 template. 不懂 extension 和 name 有什么用, 请参考:
+        """
+        When Django copies the project template files, it also renders certain files through the template engine:
+        the files whose extensions match the --extension option (py by default) and the files whose names are
+        passed with the --name option. The template context used is:
+
+        Any option passed to the startapp command (among the command’s supported options)
+        project_name – the project name as passed to the command
+        project_directory – the full path of the newly created project
+        secret_key – a random key for the SECRET_KEY setting
+        docs_version – the version of the documentation: 'dev' or '1.x'
+        Please also see the rendering warning as mentioned for startapp.
+        """
         make_option('--template',
                     action='store', dest='template',
                     help='The dotted import path to load the template from.'),
+
+        猜测: --extension 表示需要渲染的文件扩展名, 默认是 .py
         make_option('--extension', '-e', dest='extensions',
                     action='append', default=['py'],
                     help='The file extension(s) to render (default: "py"). '
                          'Separate multiple extensions with commas, or use '
                          '-e multiple times.'),
+
+        猜测: --name 指定某个特定的文件名
         make_option('--name', '-n', dest='files',
                     action='append', default=[],
                     help='The file name(s) to render. '
                          'Separate multiple extensions with commas, or use '
                          '-n multiple times.')
         )
+
     requires_model_validation = False
+
     # Can't import settings during this command, because they haven't
-    # necessarily been created.
+    # necessarily been created. 尚未创建 settings, 不能导入 settings
     can_import_settings = False
+
     # The supported URL schemes
     url_schemes = ['http', 'https', 'ftp']
 
@@ -69,18 +93,21 @@ class TemplateCommand(BaseCommand):
 
         # If it's not a valid directory name.
         if not re.search(r'^[_a-zA-Z]\w*$', name):
+
             # Provide a smart error message, depending on the error.
-            if not re.search(r'^[_a-zA-Z]', name):
+            if not re.search(r'^[_a-zA-Z]', name): 如果不是以字母或者下划线开头
                 message = ('make sure the name begins '
                            'with a letter or underscore')
-            else:
+            else:   可能有其他字符
                 message = 'use only numbers, letters and underscores'
+
             raise CommandError("%r is not a valid %s name. Please %s." %
                                (name, app_or_project, message))
 
         # if some directory is given, make sure it's nicely expanded
-        if target is None:
+        if target is None: 目标目录
             top_dir = path.join(os.getcwd(), name)
+
             try:
                 os.makedirs(top_dir)
             except OSError as e:
@@ -89,21 +116,27 @@ class TemplateCommand(BaseCommand):
                 else:
                     message = e
                 raise CommandError(message)
+
         else:
             top_dir = os.path.abspath(path.expanduser(target))
+
             if not os.path.exists(top_dir):
                 raise CommandError("Destination directory '%s' does not "
                                    "exist, please create it first." % top_dir)
 
         extensions = tuple(
             handle_extensions(options.get('extensions'), ignored=()))
+
         extra_files = []
         for file in options.get('files'):
             extra_files.extend(map(lambda x: x.strip(), file.split(',')))
+
+        在 django 的中带有项目的模版, 只要 render 后就可以得到某个具体项目的代码
         if self.verbosity >= 2:
             self.stdout.write("Rendering %s template files with "
                               "extensions: %s\n" %
                               (app_or_project, ', '.join(extensions)))
+
             self.stdout.write("Rendering %s template files with "
                               "filenames: %s\n" %
                               (app_or_project, ', '.join(extra_files)))
@@ -118,14 +151,17 @@ class TemplateCommand(BaseCommand):
         }), autoescape=False)
 
         # Setup a stub settings environment for template rendering
-        from django.conf import settings
+        from django.conf import settings # 此处的 settings 是 LazySettings 的对象
+
+        configured 可以获取全局的默认设置
         if not settings.configured:
-            settings.configure()
+            settings.configure() #调用 settings 对象的配置函数
 
         template_dir = self.handle_template(options.get('template'),
                                             base_subdir)
         prefix_length = len(template_dir) + 1
 
+        # 从 django 中得到 tempdir, 然后依次读取其中的文件 render
         for root, dirs, files in os.walk(template_dir):
 
             path_rest = root[prefix_length:]
@@ -143,9 +179,11 @@ class TemplateCommand(BaseCommand):
                 if filename.endswith(('.pyo', '.pyc', '.py.class')):
                     # Ignore some files as they cause various breakages.
                     continue
+
                 old_path = path.join(root, filename)
                 new_path = path.join(top_dir, relative_dir,
                                      filename.replace(base_name, name))
+
                 if path.exists(new_path):
                     raise CommandError("%s already exists, overlaying a "
                                        "project or app into an existing "
@@ -156,11 +194,13 @@ class TemplateCommand(BaseCommand):
                 # accidentally render Django templates files
                 with open(old_path, 'rb') as template_file:
                     content = template_file.read()
+
                 if filename.endswith(extensions) or filename in extra_files:
                     content = content.decode('utf-8')
                     template = Template(content)
                     content = template.render(context)
                     content = content.encode('utf-8')
+
                 with open(new_path, 'wb') as new_file:
                     new_file.write(content)
 
@@ -190,21 +230,28 @@ class TemplateCommand(BaseCommand):
         Determines where the app or project templates are.
         Use django.__path__[0] as the default because we don't
         know into which directory Django has been installed.
+
+        决定项目的模版
         """
         if template is None:
             return path.join(django.__path__[0], 'conf', subdir)
         else:
-            if template.startswith('file://'):
+            if template.startswith('file://'): 本地文件
                 template = template[7:]
+
             expanded_template = path.expanduser(template)
             expanded_template = path.normpath(expanded_template)
-            if path.isdir(expanded_template):
+
+            if path.isdir(expanded_template): 是否为目录
                 return expanded_template
+
+            # 还可以网络下载
             if self.is_url(template):
                 # downloads the file and returns the path
                 absolute_path = self.download(template)
             else:
                 absolute_path = path.abspath(expanded_template)
+
             if path.exists(absolute_path):
                 return self.extract(absolute_path)
 
@@ -218,10 +265,12 @@ class TemplateCommand(BaseCommand):
         def cleanup_url(url):
             tmp = url.rstrip('/')
             filename = tmp.split('/')[-1]
+
             if url.endswith('/'):
                 display_url  = tmp + '/'
             else:
                 display_url = url
+
             return filename, display_url
 
         prefix = 'django_%s_template_' % self.app_or_project
@@ -232,7 +281,9 @@ class TemplateCommand(BaseCommand):
         if self.verbosity >= 2:
             self.stdout.write("Downloading %s\n" % display_url)
         try:
+            # 用的是 urllib 中的 urlretrieve 函数, 可以从网络下载某个资源
             the_path, info = urlretrieve(url, path.join(tempdir, filename))
+
         except IOError as e:
             raise CommandError("couldn't download URL %s to %s: %s" %
                                (url, filename, e))
@@ -241,6 +292,7 @@ class TemplateCommand(BaseCommand):
 
         # Trying to get better name from response headers
         content_disposition = info.get('content-disposition')
+
         if content_disposition:
             _, params = cgi.parse_header(content_disposition)
             guessed_filename = params.get('filename') or used_name
@@ -250,6 +302,7 @@ class TemplateCommand(BaseCommand):
         # Falling back to content type guessing
         ext = self.splitext(guessed_filename)[1]
         content_type = info.get('content-type')
+
         if not ext and content_type:
             ext = mimetypes.guess_extension(content_type)
             if ext:
@@ -259,7 +312,7 @@ class TemplateCommand(BaseCommand):
         # chances of being recognnized by the archive utils
         if used_name != guessed_filename:
             guessed_path = path.join(tempdir, guessed_filename)
-            shutil.move(the_path, guessed_path)
+            shutil.move(the_path, guessed_path) # rename
             return guessed_path
 
         # Giving up
@@ -309,6 +362,7 @@ class TemplateCommand(BaseCommand):
         if sys.platform.startswith('java'):
             # On Jython there is no os.access()
             return
+
         if not os.access(filename, os.W_OK):
             st = os.stat(filename)
             new_permissions = stat.S_IMODE(st.st_mode) | stat.S_IWUSR

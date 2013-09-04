@@ -75,7 +75,7 @@ STATUS_CODE_TEXT = {
 
 class LimitedStream(object):
     '''
-    LimitedStream wraps another stream in order to not allow reading from it
+    LimitedStream wraps another stream in order to not allow reading from it 不允许读
     past specified amount of bytes.
     '''
     def __init__(self, stream, limit, buf_size=64 * 1024 * 1024):
@@ -97,10 +97,12 @@ class LimitedStream(object):
         if size is None:
             result = self.buffer + self._read_limited()
             self.buffer = b''
+
         elif size < len(self.buffer):
             result = self.buffer[:size]
             self.buffer = self.buffer[size:]
-        else: # size >= len(self.buffer)
+
+        else: # size >= len(self.buffer) 只能读一部分
             result = self.buffer + self._read_limited(size - len(self.buffer))
             self.buffer = b''
         return result
@@ -108,27 +110,33 @@ class LimitedStream(object):
     def readline(self, size=None):
         while b'\n' not in self.buffer and \
               (size is None or len(self.buffer) < size):
+            # 直到读到 \n 为止
             if size:
                 # since size is not None here, len(self.buffer) < size
                 chunk = self._read_limited(size - len(self.buffer))
             else:
                 chunk = self._read_limited()
+
             if not chunk:
                 break
+
             self.buffer += chunk
+
         sio = BytesIO(self.buffer)
         if size:
             line = sio.readline(size)
         else:
             line = sio.readline()
-        self.buffer = sio.read()
+
+        self.buffer = sio.read() # 把剩下的数据放入 buffer
         return line
 
-
+继承自 http.HttpRequest
 class WSGIRequest(http.HttpRequest):
-    def __init__(self, environ):
-        script_name = base.get_script_name(environ)
-        path_info = base.get_path_info(environ)
+    def __init__(self, environ): # 要传入环境变量
+        script_name = base.get_script_name(environ) # 脚本
+        path_info = base.get_path_info(environ)     # 路径
+
         if not path_info or path_info == script_name:
             # Sometimes PATH_INFO exists, but is empty (e.g. accessing
             # the SCRIPT_NAME URL without a trailing slash). We really need to
@@ -138,14 +146,18 @@ class WSGIRequest(http.HttpRequest):
             # (The comparison of path_info to script_name is to work around an
             # apparent bug in flup 1.0.1. See Django ticket #8490).
             path_info = '/'
+
         self.environ = environ
         self.path_info = path_info
         self.path = '%s%s' % (script_name, path_info)
+
         self.META = environ
         self.META['PATH_INFO'] = path_info
         self.META['SCRIPT_NAME'] = script_name
         self.method = environ['REQUEST_METHOD'].upper()
-        _, content_params = self._parse_content_type(self.META.get('CONTENT_TYPE', ''))
+
+        _, content_params = self._parse_content_type(self.META.get('CONTENT_TYPE', '')) # 分析请求内容类型
+
         if 'charset' in content_params:
             try:
                 codecs.lookup(content_params['charset'])
@@ -153,16 +165,19 @@ class WSGIRequest(http.HttpRequest):
                 pass
             else:
                 self.encoding = content_params['charset']
+
         self._post_parse_error = False
+
         try:
-            content_length = int(self.environ.get('CONTENT_LENGTH'))
+            content_length = int(self.environ.get('CONTENT_LENGTH')) # 长度
         except (ValueError, TypeError):
             content_length = 0
+
         self._stream = LimitedStream(self.environ['wsgi.input'], content_length)
         self._read_started = False
 
     def _is_secure(self):
-        return 'wsgi.url_scheme' in self.environ and self.environ['wsgi.url_scheme'] == 'https'
+        return 'wsgi.url_scheme' in self.environ and self.environ['wsgi.url_scheme'] == 'https' # url 的方案是否安全的方案
 
     def _parse_content_type(self, ctype):
         """
@@ -174,6 +189,7 @@ class WSGIRequest(http.HttpRequest):
         """
         content_type, _, params = ctype.partition(';')
         content_params = {}
+
         for parameter in params.split(';'):
             k, _, v = parameter.strip().partition('=')
             content_params[k] = v
@@ -181,13 +197,14 @@ class WSGIRequest(http.HttpRequest):
 
     def _get_request(self):
         if not hasattr(self, '_request'):
-            self._request = datastructures.MergeDict(self.POST, self.GET)
+            self._request = datastructures.MergeDict(self.POST, self.GET) # 合并字典
         return self._request
 
     def _get_get(self):
         if not hasattr(self, '_get'):
             # The WSGI spec says 'QUERY_STRING' may be absent.
-            self._get = http.QueryDict(self.environ.get('QUERY_STRING', ''), encoding=self._encoding)
+            self._get = http.QueryDict(self.environ.get('QUERY_STRING', ''), encoding=self._encoding) # 获取 get query string
+
         return self._get
 
     def _set_get(self, get):
@@ -214,21 +231,24 @@ class WSGIRequest(http.HttpRequest):
             self._load_post_and_files()
         return self._files
 
+    # 很有意思的设计 http://docs.python.org/2/library/functions.html#property
     GET = property(_get_get, _set_get)
     POST = property(_get_post, _set_post)
     COOKIES = property(_get_cookies, _set_cookies)
     FILES = property(_get_files)
     REQUEST = property(_get_request)
 
-
+# 继承, 但只实现了 __call__ 方法, 方便使用
 class WSGIHandler(base.BaseHandler):
     initLock = Lock()
     request_class = WSGIRequest
 
+    # WSGIHandler 也可以作为函数来调用
     def __call__(self, environ, start_response):
         # Set up middleware if needed. We couldn't do this earlier, because
         # settings weren't available.
-        if self._request_middleware is None:
+        if self._request_middleware is None: # 这里的检测: 因为 self._request_middleware 是最后才设定的, 所以如果为空,
+                                            # 很可能是因为 self.load_middleware()
             with self.initLock:
                 try:
                     # Check that middleware is still uninitialised.
@@ -240,9 +260,11 @@ class WSGIHandler(base.BaseHandler):
                     raise
 
         set_script_prefix(base.get_script_name(environ))
-        signals.request_started.send(sender=self.__class__)
+        signls.request_started.send(sender=self.__class__) # __class__ 代表自己的类
+
         try:
-            request = self.request_class(environ)
+            request = self.request_class(environ) # 实例化 request_class = WSGIRequest
+
         except UnicodeDecodeError:
             logger.warning('Bad Request (UnicodeDecodeError)',
                 exc_info=sys.exc_info(),
@@ -260,9 +282,14 @@ class WSGIHandler(base.BaseHandler):
             status_text = STATUS_CODE_TEXT[response.status_code]
         except KeyError:
             status_text = 'UNKNOWN STATUS CODE'
-        status = '%s %s' % (response.status_code, status_text)
+
+        status = '%s %s' % (response.status_code, status_text) # 状态码
+
         response_headers = [(str(k), str(v)) for k, v in response.items()]
+
+        # 对于每个一个 cookie, 都在 header 中设置: Set-cookie xxx=yyy
         for c in response.cookies.values():
             response_headers.append((str('Set-Cookie'), str(c.output(header=''))))
-        start_response(force_str(status), response_headers)
+
+        start_response(force_str(status), response_headers) #开始相应, 应该有更多秘密
         return response

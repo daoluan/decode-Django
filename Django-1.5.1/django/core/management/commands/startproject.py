@@ -15,10 +15,11 @@ class Command(TemplateCommand):
 
         # Check that the project_name cannot be imported.
         try:
-            import_module(project_name)
+            import_module(project_name) #  检测是否有重复
         except ImportError:
             pass
         else:
+            # 如果导入成功, 将异常
             raise CommandError("%r conflicts with the name of an existing "
                                "Python module and cannot be used as a "
                                "project name. Please try another name." %

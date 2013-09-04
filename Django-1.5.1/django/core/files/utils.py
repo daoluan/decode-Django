@@ -25,5 +25,6 @@ class FileProxyMixin(object):
     writelines = property(lambda self: self.file.writelines)
     xreadlines = property(lambda self: self.file.xreadlines)
 
+
     def __iter__(self):
         return iter(self.file)

@@ -1,22 +1,29 @@
 """
 HTTP server that implements the Python WSGI protocol (PEP 333, rev 1.21).
 
+实现 WSGI 的接口
+
 Based on wsgiref.simple_server which is part of the standard library since 2.5.
 
 This is a simple server for use in testing or debugging Django apps. It hasn't
 been reviewed for security issues. DON'T USE IT FOR PRODUCTION USE!
+
+内部服务器专用, 不能用于产品级的应用
 """
 
 from __future__ import unicode_literals
+
 
 import os
 import socket
 import sys
 import traceback
+
 try:
     from urllib.parse import urljoin
 except ImportError:     # Python 2
     from urlparse import urljoin
+
 from django.utils.six.moves import socketserver
 from wsgiref import simple_server
 from wsgiref.util import FileWrapper   # for backwards compatibility
@@ -30,8 +37,17 @@ from django.utils.importlib import import_module
 __all__ = ['WSGIServer', 'WSGIRequestHandler']
 
 
+
 def get_internal_wsgi_application():
     """
+    会在项目的 settings 中指定 WSGI_APPLICATION.
+
+    ...
+    # Python dotted path to the WSGI application used by Django's runserver.
+    WSGI_APPLICATION = 'projectname.wsgi.application'
+    wsgi.py 中会创建 application 对象
+    ...
+
     Loads and returns the WSGI application as configured by the user in
     ``settings.WSGI_APPLICATION``. With the default ``startproject`` layout,
     this will be the ``application`` object in ``projectname/wsgi.py``.
@@ -46,18 +62,23 @@ def get_internal_wsgi_application():
 
     """
     from django.conf import settings
-    app_path = getattr(settings, 'WSGI_APPLICATION')
+    app_path = getattr(settings, '')
+
     if app_path is None:
-        return get_wsgi_application()
+        return get_wsgi_application() #可能在 settings　中会丢失 WSGI_APPLICATION, 那么从 django 中加载默认
+
     module_name, attr = app_path.rsplit('.', 1)
+
     try:
-        mod = import_module(module_name)
+        mod = import_module(module_name) #尝试导入
     except ImportError as e:
         raise ImproperlyConfigured(
             "WSGI application '%s' could not be loaded; "
             "could not import module '%s': %s" % (app_path, module_name, e))
+
     try:
-        app = getattr(mod, attr)
+        app = getattr(mod, attr) # application = get_wsgi_application() in wsgi.py
+
     except AttributeError as e:
         raise ImproperlyConfigured(
             "WSGI application '%s' could not be loaded; "
@@ -79,20 +100,22 @@ class ServerHandler(simple_server.ServerHandler, object):
 
         assert isinstance(data, bytes), "write() argument must be bytestring"
 
-        if not self.status:
+        if not self.status: 必须有 status
             raise AssertionError("write() before start_response()")
 
-        elif not self.headers_sent:
+        elif not self.headers_sent: #先发送 header
             # Before the first output, send the stored headers
             self.bytes_sent = len(data)    # make sure we know content-length
             self.send_headers()
         else:
             self.bytes_sent += len(data)
 
-        # XXX check Content-Length and truncate if too many bytes written?
+        # XXX check Content-Length and truncate if too many bytes written? 是否需要分段发送过大的数据?
 
-        # If data is too large, socket will choke, so write chunks no larger
+        # If data is too large, socket will choke, 窒息死掉 so write chunks no larger
         # than 32MB at a time.
+
+        分片发送
         length = len(data)
         if length > 33554432:
             offset = 0
@@ -122,7 +145,7 @@ class ServerHandler(simple_server.ServerHandler, object):
 
 
 class WSGIServer(simple_server.WSGIServer, object):
-    """BaseHTTPServer that implements the Python WSGI protocol"""
+    """BaseHTTPServer that implements the Python WSGI protocol""" 实现 WSGI
 
     def __init__(self, *args, **kwargs):
         if kwargs.pop('ipv6', False):
@@ -184,10 +207,12 @@ class WSGIRequestHandler(simple_server.WSGIRequestHandler, object):
 
 def run(addr, port, wsgi_handler, ipv6=False, threading=False):
     server_address = (addr, port)
+
     if threading:
         httpd_cls = type(str('WSGIServer'), (socketserver.ThreadingMixIn, WSGIServer), {})
     else:
         httpd_cls = WSGIServer
+
     httpd = httpd_cls(server_address, WSGIRequestHandler, ipv6=ipv6)
     httpd.set_app(wsgi_handler)
-    httpd.serve_forever()
+    httpd.serve_forever() 永久运行

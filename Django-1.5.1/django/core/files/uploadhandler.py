@@ -54,9 +54,10 @@ class StopFutureHandlers(UploadFileException):
     """
     pass
 
+基础类
 class FileUploadHandler(object):
     """
-    Base class for streaming upload handlers.
+    Base class for streaming upload handlers. 
     """
     chunk_size = 64 * 2 ** 10 #: The default chunk size is 64 KB.
 
@@ -123,7 +124,7 @@ class FileUploadHandler(object):
 
 class TemporaryFileUploadHandler(FileUploadHandler):
     """
-    Upload handler that streams data into a temporary file.
+    Upload handler that streams data into a temporary file. 将上传文件导出临时文件
     """
     def __init__(self, *args, **kwargs):
         super(TemporaryFileUploadHandler, self).__init__(*args, **kwargs)
@@ -145,7 +146,7 @@ class TemporaryFileUploadHandler(FileUploadHandler):
 
 class MemoryFileUploadHandler(FileUploadHandler):
     """
-    File upload handler to stream uploads into memory (used for small files).
+    File upload handler to stream uploads into memory (used for small files). 直接在内存中存放上传文件
     """
 
     def handle_raw_input(self, input_data, META, content_length, boundary, encoding=None):
@@ -196,6 +197,7 @@ def load_handler(path, *args, **kwargs):
     """
     Given a path to a handler, return an instance of that handler.
 
+    用法
     E.g.::
         >>> load_handler('django.core.files.uploadhandler.TemporaryFileUploadHandler', request)
         <TemporaryFileUploadHandler object at 0x...>

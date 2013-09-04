@@ -20,6 +20,7 @@ if os.name == 'nt':
         """
         Temporary file object constructor that works in Windows and supports
         reopening of the temporary file in windows.
+        可以重复打开的 tempfile
         """
         def __init__(self, mode='w+b', bufsize=-1, suffix='', prefix='',
                 dir=None):

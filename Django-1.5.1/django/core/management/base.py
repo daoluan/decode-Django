@@ -2,6 +2,7 @@
 Base classes for writing management commands (named commands which can
 be executed through ``django-admin.py`` or ``manage.py``).
 
+命令基础类, 可以被 django-admin.py 或者 manage.py 执行
 """
 import os
 import sys
@@ -37,23 +38,34 @@ def handle_default_options(options):
     Include any default options that all commands should accept here
     so that ManagementUtility can handle them before searching for
     user commands.
+    options 已经分析 --settings 和 --pythonpath, 经由 OptionParser 解析后会将 settings 和 pythonpath 转化为自己的属性, 可以直接访问
+    譬如:
+    dj_admin.py --settings /home/settings.py
+    parser = OptionParser(xxx)
+    parser.add_option(["--settings","/home/settings.py"])
+    parser.settings == /home/settings.py
 
     """
+    导入 settings 设置到系统环境中
     if options.settings:
         os.environ['DJANGO_SETTINGS_MODULE'] = options.settings
+
+    如果有需要, 可以插入 python path
     if options.pythonpath:
         sys.path.insert(0, options.pythonpath)
 
 
 class OutputWrapper(object):
     """
-    Wrapper around stdout/stderr
+    Wrapper around stdout/stderr 标准输入输出
     """
     def __init__(self, out, style_func=None, ending='\n'):
         self._out = out
         self.style_func = None
-        if hasattr(out, 'isatty') and out.isatty():
+
+        if hasattr(out, 'isatty') and out.isatty(): 如果是一个终端才设置自定义输出格式
             self.style_func = style_func
+
         self.ending = ending
 
     def __getattr__(self, name):
@@ -61,17 +73,21 @@ class OutputWrapper(object):
 
     def write(self, msg, style_func=None, ending=None):
         ending = ending is None and self.ending or ending
+
         if ending and not msg.endswith(ending):
             msg += ending
+
+        防止 style_func 和 self.style_func 都为空, 自定义一个空处理 lambda
         style_func = [f for f in (style_func, self.style_func, lambda x:x)
                       if f is not None][0]
+
         self._out.write(force_str(style_func(msg)))
 
 
 class BaseCommand(object):
     """
     The base class from which all management commands ultimately
-    derive.
+    derive. 必须都继承这个类
 
     Use this class if you want access to all of the mechanisms which
     parse the command-line arguments and work out what code to call in
@@ -82,15 +98,19 @@ class BaseCommand(object):
     the command-parsing and -execution behavior, the normal flow works
     as follows:
 
+    两者都是调用 run_from_argv() 函数
     1. ``django-admin.py`` or ``manage.py`` loads the command class
        and calls its ``run_from_argv()`` method.
 
+
+    run_from_argv --> create_parser --> execute
     2. The ``run_from_argv()`` method calls ``create_parser()`` to get
        an ``OptionParser`` for the arguments, parses them, performs
        any environment changes requested by options like
        ``pythonpath``, and then calls the ``execute()`` method,
        passing the parsed arguments.
 
+    execute --> handle()
     3. The ``execute()`` method attempts to carry out the command by
        calling the ``handle()`` method with the parsed arguments; any
        output produced by ``handle()`` will be printed to standard
@@ -101,6 +121,7 @@ class BaseCommand(object):
        ``CommandError``), ``run_from_argv()`` will  instead print an error
        message to ``stderr``.
 
+    子类是从 handle() 开始的, 逻辑放在 handle 里
     Thus, the ``handle()`` method is typically the starting point for
     subclasses; many built-in commands and command types either place
     all of their logic in ``handle()``, or perform some additional
@@ -109,33 +130,33 @@ class BaseCommand(object):
 
     Several attributes affect behavior at various steps along the way:
 
-    ``args``
+    ``args`` 参数
         A string listing the arguments accepted by the command,
         suitable for use in help messages; e.g., a command which takes
         a list of application names might set this to '<appname
         appname ...>'.
 
-    ``can_import_settings``
+    ``can_import_settings`` 是否导入 settings
         A boolean indicating whether the command needs to be able to
         import Django settings; if ``True``, ``execute()`` will verify
         that this is possible before proceeding. Default value is
         ``True``.
 
-    ``help``
+    ``help`` 帮助
         A short description of the command, which will be printed in
         help messages.
 
-    ``option_list``
+    ``option_list`` 用于解析参数
         This is the list of ``optparse`` options which will be fed
         into the command's ``OptionParser`` for parsing arguments.
 
-    ``output_transaction``
+    ``output_transaction`` 是否输出 sql 事务
         A boolean indicating whether the command outputs SQL
         statements; if ``True``, the output will automatically be
         wrapped with ``BEGIN;`` and ``COMMIT;``. Default value is
         ``False``.
 
-    ``requires_model_validation``
+    ``requires_model_validation`` 在执行前会检测命令的有效性
         A boolean; if ``True``, validation of installed models will be
         performed prior to executing the command. Default value is
         ``True``. To validate an individual application's models
@@ -149,6 +170,7 @@ class BaseCommand(object):
         make_option('-v', '--verbosity', action='store', dest='verbosity', default='1',
             type='choice', choices=['0', '1', '2', '3'],
             help='Verbosity level; 0=minimal output, 1=normal output, 2=verbose output, 3=very verbose output'),
+
         make_option('--settings',
             help='The Python path to a settings module, e.g. "myproject.settings.main". If this isn\'t provided, the DJANGO_SETTINGS_MODULE environment variable will be used.'),
         make_option('--pythonpath',
@@ -165,7 +187,7 @@ class BaseCommand(object):
     output_transaction = False  # Whether to wrap the output in a "BEGIN; COMMIT;"
 
     def __init__(self):
-        self.style = color_style()
+        self.style = color_style() 颜色?
 
     def get_version(self):
         """
@@ -178,6 +200,7 @@ class BaseCommand(object):
 
     def usage(self, subcommand):
         """
+        返回剪短的提示
         Return a brief description of how to use this command, by
         default from the attribute ``self.help``.
 
@@ -190,10 +213,12 @@ class BaseCommand(object):
 
     def create_parser(self, prog_name, subcommand):
         """
+        创建并返回解析器, 用于解析命令的参数
         Create and return the ``OptionParser`` which will be used to
         parse the arguments to this command.
 
         """
+        # OptionParser 是 python 内置的, 用于命令 option 的管理
         return OptionParser(prog=prog_name,
                             usage=self.usage(subcommand),
                             version=self.get_version(),
@@ -205,9 +230,10 @@ class BaseCommand(object):
         ``self.usage()``.
 
         """
-        parser = self.create_parser(prog_name, subcommand)
+        parser = self.create_parser(prog_name, subcommand) 创建 OptionParser, 并从中 print_help
         parser.print_help()
 
+    # step 1
     def run_from_argv(self, argv):
         """
         Set up any environment changes requested (e.g., Python path
@@ -215,10 +241,14 @@ class BaseCommand(object):
         command raises a ``CommandError``, intercept it and print it sensibly
         to stderr.
         """
-        parser = self.create_parser(argv[0], argv[1])
-        options, args = parser.parse_args(argv[2:])
-        handle_default_options(options)
+        # 不懂, 没有看到 stdout stderr 被传入到这个函数中
+        parser = self.create_parser(argv[0], argv[1]) # 创建解析器, 返回 OptionParser
+        options, args = parser.parse_args(argv[2:]) 解析参数
+
+        handle_default_options(options) 导入 setting 等
+
         try:
+            # step 2
             self.execute(*args, **options.__dict__)
         except Exception as e:
             # self.stderr is not guaranteed to be set here
@@ -250,18 +280,22 @@ class BaseCommand(object):
             translation.activate('en-us')
 
         try:
-            if self.requires_model_validation and not options.get('skip_validation'):
+            if self.requires_model_validation and not options.get('skip_validation'): 如果需要就检测有效性
                 self.validate()
+
             output = self.handle(*args, **options)
+
             if output:
-                if self.output_transaction:
+                if self.output_transaction: 需要打印事务
                     # This needs to be imported here, because it relies on
                     # settings.
                     from django.db import connections, DEFAULT_DB_ALIAS
                     connection = connections[options.get('database', DEFAULT_DB_ALIAS)]
                     if connection.ops.start_transaction_sql():
                         self.stdout.write(self.style.SQL_KEYWORD(connection.ops.start_transaction_sql()))
+
                 self.stdout.write(output)
+
                 if self.output_transaction:
                     self.stdout.write('\n' + self.style.SQL_KEYWORD("COMMIT;"))
         finally:
@@ -270,14 +304,18 @@ class BaseCommand(object):
 
     def validate(self, app=None, display_num_errors=False):
         """
+        有效性检测
         Validates the given app, raising CommandError for any errors.
 
         If app is None, then this will validate all installed apps.
 
         """
         from django.core.management.validation import get_validation_errors
+
         s = StringIO()
+
         num_errors = get_validation_errors(s, app)
+
         if num_errors:
             s.seek(0)
             error_text = s.read()
@@ -287,6 +325,7 @@ class BaseCommand(object):
 
     def handle(self, *args, **options):
         """
+        真正的逻辑
         The actual logic of the command. Subclasses must implement
         this method.
 
@@ -296,9 +335,11 @@ class BaseCommand(object):
 
 class AppCommand(BaseCommand):
     """
+    带有 app_name 的命令
     A management command which takes one or more installed application
     names as arguments, and does something with each of them.
 
+    handle_app() 只会执行一次
     Rather than implementing ``handle()``, subclasses must implement
     ``handle_app()``, which will be called once for each application.
 
@@ -307,17 +348,22 @@ class AppCommand(BaseCommand):
 
     def handle(self, *app_labels, **options):
         from django.db import models
+
         if not app_labels:
             raise CommandError('Enter at least one appname.')
+
         try:
             app_list = [models.get_app(app_label) for app_label in app_labels]
         except (ImproperlyConfigured, ImportError) as e:
             raise CommandError("%s. Are you sure your INSTALLED_APPS setting is correct?" % e)
+
         output = []
         for app in app_list:
             app_output = self.handle_app(app, **options)
+
             if app_output:
                 output.append(app_output)
+
         return '\n'.join(output)
 
     def handle_app(self, app, **options):
@@ -332,6 +378,7 @@ class AppCommand(BaseCommand):
 
 class LabelCommand(BaseCommand):
     """
+    不懂, 不知道具体有什么用
     A management command which takes one or more arbitrary arguments
     (labels) on the command line, and does something with each of
     them.
@@ -353,8 +400,10 @@ class LabelCommand(BaseCommand):
         output = []
         for label in labels:
             label_output = self.handle_label(label, **options)
+
             if label_output:
                 output.append(label_output)
+
         return '\n'.join(output)
 
     def handle_label(self, label, **options):
@@ -368,6 +417,7 @@ class LabelCommand(BaseCommand):
 
 class NoArgsCommand(BaseCommand):
     """
+    没有任何的参数
     A command which takes no arguments on the command line.
 
     Rather than implementing ``handle()``, subclasses must implement
