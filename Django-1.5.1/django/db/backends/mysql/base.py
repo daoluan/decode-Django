@@ -11,6 +11,7 @@ import sys
 import warnings
 
 try:
+    # django 的 mysql 模块依赖 MySQLdb
     import MySQLdb as Database
 except ImportError as e:
     from django.core.exceptions import ImproperlyConfigured
@@ -21,12 +22,16 @@ from django.utils.functional import cached_property
 # We want version (1, 2, 1, 'final', 2) or later. We can't just use
 # lexicographic ordering in this check because then (1, 2, 1, 'gamma')
 # inadvertently passes the version test.
+
+# 版本
 version = Database.version_info
+
 if (version < (1, 2, 1) or (version[:3] == (1, 2, 1) and
         (len(version) < 5 or version[3] != 'final' or version[4] < 2))):
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("MySQLdb-1.2.1p2 or newer is required; you have %s" % Database.__version__)
 
+# 依赖
 from MySQLdb.converters import conversions, Thing2Literal
 from MySQLdb.constants import FIELD_TYPE, CLIENT
 
@@ -48,6 +53,7 @@ from django.conf import settings
 if settings.DEBUG:
     warnings.filterwarnings("error", category=Database.Warning)
 
+# 都由 MySQLdb 内部实现
 DatabaseError = Database.DatabaseError
 IntegrityError = Database.IntegrityError
 
@@ -102,6 +108,7 @@ server_version_re = re.compile(r'(\d{1,2})\.(\d{1,2})\.(\d{1,2})')
 # standard util.CursorDebugWrapper can be used. Also, using sql_mode
 # TRADITIONAL will automatically cause most warnings to be treated as errors.
 
+# tips: 好似 DatabaseFeatures,DatabaseOperations,DatabaseWrapper 都不在这里, 这些类在 django.db.core.__init__.py 中定义
 class CursorWrapper(object):
     """
     A thin wrapper around MySQLdb's normal cursor class so that we can catch

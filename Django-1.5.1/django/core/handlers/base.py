@@ -35,7 +35,9 @@ class BaseHandler(object):
 
     def load_middleware(self):
         """
-        Populate middleware lists from settings.MIDDLEWARE_CLASSES. 从 settings 中加载各种中间件
+        Populate middleware lists from settings.MIDDLEWARE_CLASSES.
+
+        从 settings 中加载各种中间件
 
         Must be called after the environment is fixed (see __call__ in subclasses).
         """
@@ -115,7 +117,7 @@ class BaseHandler(object):
                     if response:
                         break
 
-                如果没有结果, 尝试 request 中是否有 urlconf, 不懂
+                # 如果没有结果, 尝试 request 中是否有 urlconf, 不懂
                 if response is None:
                     if hasattr(request, 'urlconf'):
                         # Reset url resolver with a custom urlconf. 自定义的 urlconf
@@ -135,7 +137,7 @@ class BaseHandler(object):
 
                 if response is None:
                     try:
-                        这里可能调用的是真正的处理函数
+                        # 这里调用的是真正的处理函数, 我们一般在 view.py 中定义这些函数
                         response = callback(request, *callback_args, **callback_kwargs)
                     except Exception as e:
                         # If the view raised an exception, run it through exception

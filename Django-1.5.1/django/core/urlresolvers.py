@@ -354,6 +354,7 @@ class RegexURLResolver(LocaleRegexProvider):
 
         return self._app_dict[language_code]
 
+    # 最关键的函数
     def resolve(self, path):
 
         tried = []

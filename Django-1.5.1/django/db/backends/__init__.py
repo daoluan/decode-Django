@@ -19,6 +19,8 @@ from django.utils.timezone import is_aware
 class BaseDatabaseWrapper(object):
     """
     Represents a database connection.
+
+    表示一个打开的数据库
     """
     ops = None
     vendor = 'unknown'
@@ -28,25 +30,33 @@ class BaseDatabaseWrapper(object):
         # `settings_dict` should be a dictionary containing keys such as
         # NAME, USER, etc. It's called `settings_dict` instead of `settings`
         # to disambiguate it from Django settings modules.
+
+        # settints_dict 包含数据库名, 用户名, 密码等
         self.connection = None
-        self.queries = []
+        self.queries = [] #查询集
         self.settings_dict = settings_dict
         self.alias = alias
         self.use_debug_cursor = None
 
-        # Transaction related attributes
+        # Transaction related attributes 事务相关的属性
         self.transaction_state = []
         self.savepoint_state = 0
         self._dirty = None
         self._thread_ident = thread.get_ident()
         self.allow_thread_sharing = allow_thread_sharing
 
+    # 都是针对 self.alias 的操作
+    # ==
     def __eq__(self, other):
         return self.alias == other.alias
 
+    # !==
     def __ne__(self, other):
         return not self == other
 
+    # http://docs.python.org/2/reference/datamodel.html#object.__hash__
+    # Called by built-in function hash() and for operations on members of hashed collections including set, frozenset, and dict. __hash__() should return an integer.
+    # If a class does not define a __cmp__() or __eq__() method it should not define a __hash__() operation either; if it defines __cmp__() or __eq__() but not __hash__(), its instances will not be usable in hashed collections.
     def __hash__(self):
         return hash(self.alias)
 
@@ -54,10 +64,12 @@ class BaseDatabaseWrapper(object):
         if self.connection is not None:
             return self.connection.commit()
 
+    # 回滚
     def _rollback(self):
         if self.connection is not None:
             return self.connection.rollback()
 
+    # 不懂, 进入事务管理和退出事务管理
     def _enter_transaction_management(self, managed):
         """
         A hook for backend-specific changes required when entering manual
@@ -74,6 +86,7 @@ class BaseDatabaseWrapper(object):
         pass
 
     def _savepoint(self, sid):
+        # self.features 未知属性
         if not self.features.uses_savepoints:
             return
         self.cursor().execute(self.ops.savepoint_create_sql(sid))
@@ -96,6 +109,10 @@ class BaseDatabaseWrapper(object):
         if self._dirty:
             self._rollback()
             self._dirty = False
+
+        # 脏数据: 在数据库技术中,脏数据在临时更新（脏读）中产生。事务A更新了某个数据项X，但是由于某种原因，事务A出现了问题，于是要把A回滚。但是在回滚之前，另一个事务B读取了数据项X的值(A更新后)，A回滚了事务，数据项恢复了原值。事务B读取的就是数据项X的就是一个“临时”的值，就是脏数据。
+        # 简单来说就是, B 读取了临时数据
+
         while self.transaction_state:
             self.leave_transaction_management()
 
@@ -103,20 +120,23 @@ class BaseDatabaseWrapper(object):
         """
         Enters transaction management for a running thread. It must be balanced with
         the appropriate leave_transaction_management call, since the actual state is
-        managed as a stack.
+        managed as a stack. 这里有管理栈的概念
+
+        和 self.leave_transaction_management 必须成对调用
 
         The state and dirty flag are carried over from the surrounding block or
         from the settings, if there is no surrounding block (dirty is always false
         when no current block is running).
         """
         if self.transaction_state:
-            self.transaction_state.append(self.transaction_state[-1])
+            self.transaction_state.append(self.transaction_state[-1]) #压入最后一个 state
         else:
             self.transaction_state.append(settings.TRANSACTIONS_MANAGED)
 
         if self._dirty is None:
             self._dirty = False
-        self._enter_transaction_management(managed)
+
+        self._enter_transaction_management(managed) #真正的进入
 
     def leave_transaction_management(self):
         """
@@ -125,10 +145,11 @@ class BaseDatabaseWrapper(object):
         those from outside. (Commits are on connection level.)
         """
         if self.transaction_state:
-            del self.transaction_state[-1]
+            del self.transaction_state[-1] #删除最后一项
         else:
             raise TransactionManagementError(
                 "This code isn't under transaction management")
+
         # We will pass the next status (after leaving the previous state
         # behind) to subclass hook.
         self._leave_transaction_management(self.is_managed())
@@ -140,6 +161,8 @@ class BaseDatabaseWrapper(object):
 
     def validate_thread_sharing(self):
         """
+        检测数据库并没有被其他的线程连接, 除非已经设置为所有线程可以共享
+
         Validates that the connection isn't accessed by another thread than the
         one which originally created it, unless the connection was explicitly
         authorized to be shared between threads (via the `allow_thread_sharing`
@@ -170,7 +193,7 @@ class BaseDatabaseWrapper(object):
             self._dirty = True
         else:
             raise TransactionManagementError("This code isn't under transaction "
-                "management")
+                "management") #事务中才有脏数据的概念
 
     def set_clean(self):
         """
@@ -190,6 +213,8 @@ class BaseDatabaseWrapper(object):
     def is_managed(self):
         """
         Checks whether the transaction manager is in manual or in auto state.
+
+        是在人工状态下还是自动状态下, 不懂
         """
         if self.transaction_state:
             return self.transaction_state[-1]
@@ -225,13 +250,14 @@ class BaseDatabaseWrapper(object):
 
     def rollback_unless_managed(self):
         """
+        除非在管理状态下才进行回滚, 不懂
         Rolls back changes if the system is not in managed transaction mode.
         """
         self.validate_thread_sharing()
         if not self.is_managed():
             self._rollback()
         else:
-            self.set_dirty()
+            self.set_dirty() #设置脏数据, 因为在事务管理中
 
     def commit(self):
         """
@@ -255,7 +281,7 @@ class BaseDatabaseWrapper(object):
         current transaction. Returns an identifier for the savepoint that will be
         used for the subsequent rollback or commit.
         """
-        thread_ident = thread.get_ident()
+        thread_ident = thread.get_ident() 获取线程的标识
 
         self.savepoint_state += 1
 
@@ -282,7 +308,7 @@ class BaseDatabaseWrapper(object):
         if self.savepoint_state:
             self._savepoint_commit(sid)
 
-    @contextmanager
+    @contextmanager 不懂
     def constraint_checks_disabled(self):
         disabled = self.disable_constraint_checking()
         try:
@@ -291,19 +317,22 @@ class BaseDatabaseWrapper(object):
             if disabled:
                 self.enable_constraint_checking()
 
-    def disable_constraint_checking(self):
+    # 取消约束
+    def disable_constraint_checking(self): # constraint 约束
         """
         Backends can implement as needed to temporarily disable foreign key constraint
         checking.
         """
         pass
 
+    # 启动约束
     def enable_constraint_checking(self):
         """
         Backends can implement as needed to re-enable foreign key constraint checking.
         """
         pass
 
+    # 检查约束
     def check_constraints(self, table_names=None):
         """
         Backends can override this method if they can apply constraint checking (e.g. via "SET CONSTRAINTS
@@ -323,6 +352,7 @@ class BaseDatabaseWrapper(object):
             (self.use_debug_cursor is None and settings.DEBUG)):
             cursor = self.make_debug_cursor(self._cursor())
         else:
+            # 如果是非调试模式, 需要使用专用的游标类
             cursor = util.CursorWrapper(self._cursor(), self)
         return cursor
 
@@ -332,17 +362,30 @@ class BaseDatabaseWrapper(object):
 
 class BaseDatabaseFeatures(object):
     allows_group_by_pk = False
+
     # True if django.db.backend.utils.typecast_timestamp is used on values
     # returned from dates() calls.
     needs_datetime_string_cast = True
+
     empty_fetchmany_value = []
     update_can_self_select = True
 
     # Does the backend distinguish between '' and None?
-    interprets_empty_strings_as_nulls = False
+    interprets_empty_strings_as_nulls = False #是否将空字符串转换为 NULL
+    """
+    说明：
+    1、等价于没有任何值、是未知数。
+    2、NULL与0、空字符串、空格都不同。
+    3、对空值做加、减、乘、除等运算操作，结果仍为空。
+    4、NULL的处理使用NVL函数。
+    5、比较时使用关键字用“is null”和“is not null”。
+    6、空值不能被索引，所以查询时有些符合条件的数据可能查不出来，count(*)中，用nvl(列名,0)处理后再查。
+    7、排序时比其他数据都大（索引默认是降序排列，小→大），所以NULL值总是排在最后。
+    """
 
-    # Does the backend allow inserting duplicate rows when a unique_together
+    # Does the backend allow inserting duplicate rows 重复的行 when a unique_together
     # constraint exists, but one of the unique_together columns is NULL?
+    # 当列为 null 时候是否可以重复
     ignores_nulls_in_unique_constraints = True
 
     can_use_chunked_reads = True
@@ -353,7 +396,7 @@ class BaseDatabaseFeatures(object):
     can_combine_inserts_with_and_without_auto_increment_pk = False
 
     # If True, don't use integer foreign keys referring to, e.g., positive
-    # integer primary keys.
+    # integer 正整数 primary keys. 举个例子
     related_fields_match_type = False
     allow_sliced_subqueries = True
     has_select_for_update = False
@@ -470,7 +513,7 @@ class BaseDatabaseFeatures(object):
 
 class BaseDatabaseOperations(object):
     """
-    This class encapsulates all backend-specific differences, such as the way
+    This class encapsulates 压缩 all backend-specific differences, such as the way
     a backend performs ordering or calculates the ID of a recently-inserted
     row.
     """
@@ -482,6 +525,8 @@ class BaseDatabaseOperations(object):
 
     def autoinc_sql(self, table, column):
         """
+        auto inscream sql
+
         Returns any SQL needed to support auto-incrementing primary keys, or
         None if no SQL is necessary.
 
@@ -504,6 +549,7 @@ class BaseDatabaseOperations(object):
 
         This is used by the 'db' cache backend to determine where to start
         culling.
+        用于数据库换存
         """
         return "SELECT cache_key FROM %s ORDER BY cache_key LIMIT 1 OFFSET %%s"
 
@@ -516,7 +562,7 @@ class BaseDatabaseOperations(object):
 
     def date_interval_sql(self, sql, connector, timedelta):
         """
-        Implements the date interval functionality for expressions
+        Implements the date interval functionality 日期间隔 for expressions
         """
         raise NotImplementedError()
 
@@ -525,6 +571,8 @@ class BaseDatabaseOperations(object):
         Given a lookup_type of 'year', 'month' or 'day', returns the SQL that
         truncates the given date field field_name to a DATE object with only
         the given specificity.
+
+        将日期截断 不懂
         """
         raise NotImplementedError()
 
@@ -532,6 +580,8 @@ class BaseDatabaseOperations(object):
         """
         Returns the SQL necessary to cast a datetime value so that it will be
         retrieved as a Python datetime object instead of a string.
+
+        将 python datetime 转换为字符串?
 
         This SQL should include a '%s' in place of the field's name.
         """
