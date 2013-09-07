@@ -169,7 +169,7 @@ def call_command(name, *args, **options):
             defaults[opt.dest] = opt.default
     defaults.update(options)
 
-    return klass.execute(*args, **defaults)
+    return klass.execute(*args, **defaults) 真正的执行
 
 class LaxOptionParser(OptionParser):
     """

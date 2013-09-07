@@ -108,14 +108,20 @@ server_version_re = re.compile(r'(\d{1,2})\.(\d{1,2})\.(\d{1,2})')
 # standard util.CursorDebugWrapper can be used. Also, using sql_mode
 # TRADITIONAL will automatically cause most warnings to be treated as errors.
 
-# tips: 好似 DatabaseFeatures,DatabaseOperations,DatabaseWrapper 都不在这里, 这些类在 django.db.core.__init__.py 中定义
+# tips: 好似 DatabaseFeatures,DatabaseOperations,DatabaseWrapper 都不在这里, 这些类在 django.db.backends.__init__.py 中定义
 class CursorWrapper(object):
+    关于什么是游标: 游标（cursor）是系统为用户开设的一个数据缓冲区，存放SQL语句的执行结果。每个游标区都有一个名字。用户可以用SQL语句逐一从游标中获取记录，并赋给主变量，交由主语言进一步处理。
+
     """
+    对 MySQLdb 中普通 cursor 类的包装, 用以捕捉特俗的异常
+
     A thin wrapper around MySQLdb's normal cursor class so that we can catch
     particular exception instances and reraise them with the right types.
 
+    be stuck to 受困于
+
     Implemented as a wrapper, rather than a subclass, so that we aren't stuck
-    to the particular underlying representation returned by Connection.cursor().
+    to the particular underlying representation 底层表述 returned by Connection.cursor().
     """
     codes_for_integrityerror = (1048,)
 
@@ -125,22 +131,31 @@ class CursorWrapper(object):
     def execute(self, query, args=None):
         try:
             return self.cursor.execute(query, args)
+
+        # 内部错误的类型一些在 MySQLdb 中定义, 一些在 django.utils 中定义
         except Database.IntegrityError as e:
             six.reraise(utils.IntegrityError, utils.IntegrityError(*tuple(e.args)), sys.exc_info()[2])
+
         except Database.OperationalError as e:
             # Map some error codes to IntegrityError, since they seem to be
             # misclassified and Django would prefer the more logical place.
             if e[0] in self.codes_for_integrityerror:
+
+                IntegrityError 和 DatabaseError 有什么不同?
                 six.reraise(utils.IntegrityError, utils.IntegrityError(*tuple(e.args)), sys.exc_info()[2])
+
             six.reraise(utils.DatabaseError, utils.DatabaseError(*tuple(e.args)), sys.exc_info()[2])
+
         except Database.DatabaseError as e:
             six.reraise(utils.DatabaseError, utils.DatabaseError(*tuple(e.args)), sys.exc_info()[2])
 
     def executemany(self, query, args):
         try:
             return self.cursor.executemany(query, args)
+
         except Database.IntegrityError as e:
             six.reraise(utils.IntegrityError, utils.IntegrityError(*tuple(e.args)), sys.exc_info()[2])
+
         except Database.OperationalError as e:
             # Map some error codes to IntegrityError, since they seem to be
             # misclassified and Django would prefer the more logical place.
@@ -182,6 +197,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
         super(DatabaseFeatures, self).__init__(connection)
 
     @cached_property
+    内部测试函数
     def _mysql_storage_engine(self):
         "Internal method used in Django tests. Don't rely on this from your code"
         cursor = self.connection.cursor()
@@ -214,7 +230,8 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def date_trunc_sql(self, lookup_type, field_name):
         fields = ['year', 'month', 'day', 'hour', 'minute', 'second']
-        format = ('%%Y-', '%%m', '-%%d', ' %%H:', '%%i', ':%%s') # Use double percents to escape.
+        format = ('%%Y-', '%%m', '-%%d', ' %%H:', '%%i', ':%%s') # Use double percents to escape.因为本身有一个 %,所以需要 double
+
         format_def = ('0000-', '01', '-01', ' 00:', '00', ':00')
         try:
             i = fields.index(lookup_type) + 1
@@ -229,6 +246,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         return "(%s %s INTERVAL '%d 0:0:%d:%d' DAY_MICROSECOND)" % (sql, connector,
                 timedelta.days, timedelta.seconds, timedelta.microseconds)
 
+    # 删除外键
     def drop_foreignkey_sql(self):
         return "DROP FOREIGN KEY"
 
@@ -240,35 +258,44 @@ class DatabaseOperations(BaseDatabaseOperations):
         """
         return ["NULL"]
 
+    # 全文索引
     def fulltext_search_sql(self, field_name):
         return 'MATCH (%s) AGAINST (%%s IN BOOLEAN MODE)' % field_name
 
     def last_executed_query(self, cursor, sql, params):
+        MySQLdb 有未公开文档的 _last_executed 属性, 存储了以已经执行的 sql
         # With MySQLdb, cursor objects have an (undocumented) "_last_executed"
         # attribute where the exact query sent to the database is saved.
         # See MySQLdb/cursors.py in the source distribution.
         return cursor._last_executed.decode('utf-8')
 
+    最大的数
     def no_limit_value(self):
         # 2**64 - 1, as recommended by the MySQL documentation
         return 18446744073709551615
 
+    ''
     def quote_name(self, name):
         if name.startswith("`") and name.endswith("`"):
             return name # Quoting once is enough.
         return "`%s`" % name
 
+    任意值函数
     def random_function_sql(self):
         return 'RAND()'
 
     def sql_flush(self, style, tables, sequences):
+        https://docs.djangoproject.com/en/dev/ref/django-admin/#django-admin-flush
+        MySQL 有 TRUNCATE() 函数
         # NB: The generated SQL below is specific to MySQL
         # 'TRUNCATE x;', 'TRUNCATE y;', 'TRUNCATE z;'... style SQL statements
         # to clear all tables of all data
         if tables:
             sql = ['SET FOREIGN_KEY_CHECKS = 0;']
+
             for table in tables:
                 sql.append('%s %s;' % (style.SQL_KEYWORD('TRUNCATE'), style.SQL_FIELD(self.quote_name(table))))
+
             sql.append('SET FOREIGN_KEY_CHECKS = 1;')
             sql.extend(self.sequence_reset_by_name_sql(style, sequences))
             return sql
@@ -289,6 +316,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         else:
             return []
 
+    # 自动增长主键检测, MySQL 不允许出现 0
     def validate_autopk_value(self, value):
         # MySQLism: zero in AUTO_INCREMENT field does not work. Refs #17653.
         if value == 0:
@@ -300,14 +328,15 @@ class DatabaseOperations(BaseDatabaseOperations):
         if value is None:
             return None
 
-        # MySQL doesn't support tz-aware datetimes
+        不懂, 什么是 tz-aware
+        # MySQL doesn't support tz-aware datetimes 不支持 tz-aware 类型的时间
         if timezone.is_aware(value):
             if settings.USE_TZ:
                 value = value.astimezone(timezone.utc).replace(tzinfo=None)
             else:
                 raise ValueError("MySQL backend does not support timezone-aware datetimes when USE_TZ is False.")
 
-        # MySQL doesn't support microseconds
+        # MySQL doesn't support microseconds 不支持微秒
         return six.text_type(value.replace(microsecond=0))
 
     def value_to_db_time(self, value):
@@ -322,29 +351,35 @@ class DatabaseOperations(BaseDatabaseOperations):
         return six.text_type(value.replace(microsecond=0))
 
     def year_lookup_bounds(self, value):
-        # Again, no microseconds
+        # Again, no microseconds 不支持微秒
         first = '%s-01-01 00:00:00'
         second = '%s-12-31 23:59:59.99'
         return [first % value, second % value]
 
+    最长的表名, 字段名长度和表名长度限制都是64
     def max_name_length(self):
         return 64
 
+    批量插入
     def bulk_insert_sql(self, fields, num_values):
         items_sql = "(%s)" % ", ".join(["%s"] * len(fields))
         return "VALUES " + ", ".join([items_sql] * num_values)
 
+    # savepoint 就是为每一步的操作的都设定一个标记, 方便回滚
     def savepoint_create_sql(self, sid):
         return "SAVEPOINT %s" % sid
 
     def savepoint_commit_sql(self, sid):
         return "RELEASE SAVEPOINT %s" % sid
 
+    回滚到....
     def savepoint_rollback_sql(self, sid):
         return "ROLLBACK TO SAVEPOINT %s" % sid
 
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = 'mysql'
+
+    # 操作
     operators = {
         'exact': '= %s',
         'iexact': 'LIKE %s',
@@ -366,11 +401,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
 
         self.server_version = None
+
         self.features = DatabaseFeatures(self)
         self.ops = DatabaseOperations(self)
         self.client = DatabaseClient(self)
-        self.creation = DatabaseCreation(self)
+        self.creation = DatabaseCreation(self) #数据库创建器, from django.db.backends.mysql.creation import DatabaseCreation
         self.introspection = DatabaseIntrospection(self)
+
         self.validation = DatabaseValidation(self)
 
     def _valid_connection(self):
@@ -392,29 +429,49 @@ class DatabaseWrapper(BaseDatabaseWrapper):
                 'charset': 'utf8',
                 'use_unicode': True,
             }
+
             settings_dict = self.settings_dict
+
             if settings_dict['USER']:
                 kwargs['user'] = settings_dict['USER']
+
             if settings_dict['NAME']:
                 kwargs['db'] = settings_dict['NAME']
+
             if settings_dict['PASSWORD']:
                 kwargs['passwd'] = force_str(settings_dict['PASSWORD'])
+
             if settings_dict['HOST'].startswith('/'):
                 kwargs['unix_socket'] = settings_dict['HOST']
+
             elif settings_dict['HOST']:
                 kwargs['host'] = settings_dict['HOST']
+
             if settings_dict['PORT']:
                 kwargs['port'] = int(settings_dict['PORT'])
+
             # We need the number of potentially affected rows after an
             # "UPDATE", not the number of changed rows.
             kwargs['client_flag'] = CLIENT.FOUND_ROWS
             kwargs.update(settings_dict['OPTIONS'])
+
+            # 此处设置 connection, 已经有 MySQL 内部实现
             self.connection = Database.connect(**kwargs)
+
             self.connection.encoders[SafeText] = self.connection.encoders[six.text_type]
+
             self.connection.encoders[SafeBytes] = self.connection.encoders[bytes]
+
             connection_created.send(sender=self.__class__, connection=self)
-        cursor = self.connection.cursor()
+
+        cursor = self.connection.cursor() 获取游标
+
         if new_connection:
+            """
+            另外还可以用"WHERE auto_col IS NULL"条件选择出新插入的行，即在INSERT后马上用:
+            SELECT * FROM t WHERE a IS NULL;
+            选 择出来的将是新插入的行，而非真正的满足"a IS NULL"条件的行。但你要是再执行一次上述查询，则返回的又变成了真正的满足"a IS NULL"条件的行，由于a是主键，因此肯定会返回空集。这看上去很诡异是吗，不过MySQL也不想这么干，但ODBC标准里曾有这种用法，为了支持 ODBC，MySQL也是没办法啊。不过可以将SQL_AUTO_IS_NULL设为0来禁止这一用法。
+            """
             # SQL_AUTO_IS_NULL in MySQL controls whether an AUTO_INCREMENT column
             # on a recently-inserted row will return when the field is tested for
             # NULL.  Disabling this value brings this aspect of MySQL in line with
@@ -448,10 +505,20 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.server_version = tuple([int(x) for x in m.groups()])
         return self.server_version
 
+    关闭外键约束
     def disable_constraint_checking(self):
         """
         Disables foreign key checks, primarily for use in adding rows with forward references. Always returns True,
         to indicate constraint checks need to be re-enabled.
+
+        MySQL还原数据库，禁用和启用外键约束的方法(FOREIGN_KEY_CHECKS)
+        有时还原数据库时，因为表有约束导致40014错误，可以通过关闭外键约束，还原成功时再启用.
+
+        禁用
+        SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0
+
+        启用
+        SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS
         """
         self.cursor().execute('SET foreign_key_checks=0')
         return True
@@ -464,8 +531,10 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     def check_constraints(self, table_names=None):
         """
+        用在 disable_constraint_checking 和 enable_constraint_checking 之间, 为的是看是否在外键约束关闭期间是否有不合法的数据进入.
+
         Checks each table name in `table_names` for rows with invalid foreign key references. This method is
-        intended to be used in conjunction with `disable_constraint_checking()` and `enable_constraint_checking()`, to
+        intended to be used in conjunction with 连接 `disable_constraint_checking()` and `enable_constraint_checking()`, to
         determine if rows with invalid references were entered while constraint checks were off.
 
         Raises an IntegrityError on the first invalid foreign key reference encountered (if any) and provides
@@ -477,12 +546,18 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         cursor = self.cursor()
         if table_names is None:
             table_names = self.introspection.table_names(cursor)
+
         for table_name in table_names:
             primary_key_column_name = self.introspection.get_primary_key_column(cursor, table_name)
-            if not primary_key_column_name:
+
+            if not primary_key_column_name: 没有主键
                 continue
+
             key_columns = self.introspection.get_key_columns(cursor, table_name)
+
             for column_name, referenced_table_name, referenced_column_name in key_columns:
+
+                # 检测外键不丢失
                 cursor.execute("""
                     SELECT REFERRING.`%s`, REFERRING.`%s` FROM `%s` as REFERRING
                     LEFT JOIN `%s` as REFERRED
@@ -490,6 +565,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
                     WHERE REFERRING.`%s` IS NOT NULL AND REFERRED.`%s` IS NULL"""
                     % (primary_key_column_name, column_name, table_name, referenced_table_name,
                     column_name, referenced_column_name, column_name, referenced_column_name))
+
+                # 出现错误, 需要报错. 一般是外键丢失, 或者主键无效
                 for bad_row in cursor.fetchall():
                     raise utils.IntegrityError("The row in table '%s' with primary key '%s' has an invalid "
                         "foreign key: %s.%s contains a value '%s' that does not have a corresponding value in %s.%s."

@@ -7,8 +7,10 @@ class DatabaseClient(BaseDatabaseClient):
     executable_name = 'mysql'
 
     def runshell(self):
+        # 可能是 self.connection 内部有默认的设置
         settings_dict = self.connection.settings_dict
         args = [self.executable_name]
+
         db = settings_dict['OPTIONS'].get('db', settings_dict['NAME'])
         user = settings_dict['OPTIONS'].get('user', settings_dict['USER'])
         passwd = settings_dict['OPTIONS'].get('passwd', settings_dict['PASSWORD'])

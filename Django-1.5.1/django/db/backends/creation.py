@@ -28,20 +28,25 @@ class BaseDatabaseCreation(object):
         """
         Generates a 32-bit digest of a set of arguments that can be used to
         shorten identifying names.
+
+        产生标识, 不懂
         """
         h = hashlib.md5()
         for arg in args:
             h.update(force_bytes(arg))
         return h.hexdigest()[:8]
 
+    根据 model 产生创建表的 SQL 语句
     def sql_create_model(self, model, style, known_models=set()):
         """
         Returns the SQL required to create a single model, as a tuple of:
             (list_of_sql, pending_references_dict)
         """
         opts = model._meta
+
         if not opts.managed or opts.proxy or opts.swapped:
             return [], {}
+
         final_output = []
         table_output = []
         pending_references = {}
@@ -49,25 +54,35 @@ class BaseDatabaseCreation(object):
         for f in opts.local_fields:
             col_type = f.db_type(connection=self.connection)
             tablespace = f.db_tablespace or opts.db_tablespace
+
             if col_type is None:
                 # Skip ManyToManyFields, because they're not represented as
                 # database columns in this table.
                 continue
+
             # Make the definition (e.g. 'foo VARCHAR(30)') for this field.
+            字段的类型
             field_output = [style.SQL_FIELD(qn(f.column)),
                 style.SQL_COLTYPE(col_type)]
+
             # Oracle treats the empty string ('') as null, so coerce the null
             # option whenever '' is a possible value.
             null = f.null
+
             if (f.empty_strings_allowed and not f.primary_key and
                     self.connection.features.interprets_empty_strings_as_nulls):
                 null = True
+
+            字段的属性等
             if not null:
                 field_output.append(style.SQL_KEYWORD('NOT NULL'))
+
             if f.primary_key:
                 field_output.append(style.SQL_KEYWORD('PRIMARY KEY'))
+
             elif f.unique:
                 field_output.append(style.SQL_KEYWORD('UNIQUE'))
+
             if tablespace and f.unique:
                 # We must specify the index tablespace inline, because we
                 # won't be generating a CREATE INDEX statement for this field.
@@ -78,29 +93,40 @@ class BaseDatabaseCreation(object):
             if f.rel:
                 ref_output, pending = self.sql_for_inline_foreign_key_references(
                     f, known_models, style)
+
                 if pending:
+                    # 外键字段被加入 pending_references??? 不懂
                     pending_references.setdefault(f.rel.to, []).append(
                         (model, f))
                 else:
                     field_output.extend(ref_output)
+
             table_output.append(' '.join(field_output))
+
+        创建表的语句
         for field_constraints in opts.unique_together:
             table_output.append(style.SQL_KEYWORD('UNIQUE') + ' (%s)' %
                 ", ".join(
                     [style.SQL_FIELD(qn(opts.get_field(f).column))
                      for f in field_constraints]))
-
+        创建表的语句
         full_statement = [style.SQL_KEYWORD('CREATE TABLE') + ' ' +
                           style.SQL_TABLE(qn(opts.db_table)) + ' (']
+
+        将所有的字段放入 CREATE TABLE () 中
         for i, line in enumerate(table_output):  # Combine and add commas.
             full_statement.append(
                 '    %s%s' % (line, i < len(table_output) - 1 and ',' or ''))
+
         full_statement.append(')')
+
+        如果允许表空间
         if opts.db_tablespace:
             tablespace_sql = self.connection.ops.tablespace_sql(
                 opts.db_tablespace)
             if tablespace_sql:
                 full_statement.append(tablespace_sql)
+
         full_statement.append(';')
         final_output.append('\n'.join(full_statement))
 
@@ -116,6 +142,7 @@ class BaseDatabaseCreation(object):
 
         return final_output, pending_references
 
+    返回外键约束的小片段语句
     def sql_for_inline_foreign_key_references(self, field, known_models, style):
         """
         Return the SQL snippet defining the foreign key reference for a field.
@@ -137,6 +164,7 @@ class BaseDatabaseCreation(object):
 
         return output, pending
 
+    返回修改表语句, 为了添加外键约束
     def sql_for_pending_references(self, model, style, pending_references):
         """
         Returns any ALTER TABLE statements to add constraints after the fact.
@@ -146,7 +174,8 @@ class BaseDatabaseCreation(object):
         opts = model._meta
         if not opts.managed or opts.proxy or opts.swapped:
             return []
-        qn = self.connection.ops.quote_name
+
+        qn = self.connection.ops.quote_name ''
         final_output = []
         if model in pending_references:
             for rel_class, f in pending_references[model]:
@@ -165,18 +194,27 @@ class BaseDatabaseCreation(object):
                         r_name, self.connection.ops.max_name_length())),
                     qn(r_col), qn(table), qn(col),
                     self.connection.ops.deferrable_sql()))
+
             del pending_references[model]
         return final_output
 
+    生成创建索引语句
     def sql_indexes_for_model(self, model, style):
         """
         Returns the CREATE INDEX SQL statements for a single model.
         """
         if not model._meta.managed or model._meta.proxy or model._meta.swapped:
             return []
+
         output = []
+        """
+        多处地方看到:
+        opts = model._meta
+        opts.local_fields...
+        """
         for f in model._meta.local_fields:
             output.extend(self.sql_indexes_for_field(model, f, style))
+
         for fs in model._meta.index_together:
             fields = [model._meta.get_field_by_name(f)[0] for f in fs]
             output.extend(self.sql_indexes_for_fields(model, fields, style))
@@ -184,6 +222,8 @@ class BaseDatabaseCreation(object):
 
     def sql_indexes_for_field(self, model, f, style):
         """
+        sql_indexes_for_model 的辅助函数
+
         Return the CREATE INDEX SQL statements for a single model field.
         """
         if f.db_index and not f.unique:
@@ -192,6 +232,9 @@ class BaseDatabaseCreation(object):
             return []
 
     def sql_indexes_for_fields(self, model, fields, style):
+        """
+        sql_indexes_for_field 的辅助函数
+        """
         from django.db.backends.util import truncate_name
 
         if len(fields) == 1 and fields[0].db_tablespace:
@@ -219,6 +262,7 @@ class BaseDatabaseCreation(object):
             "%s;" % tablespace_sql,
         ]
 
+    生成删除表的 SQL 语句, 删除约束
     def sql_destroy_model(self, model, references_to_delete, style):
         """
         Return the DROP TABLE and restraint dropping statements for a single
@@ -226,43 +270,61 @@ class BaseDatabaseCreation(object):
         """
         if not model._meta.managed or model._meta.proxy or model._meta.swapped:
             return []
+
         # Drop the table now
         qn = self.connection.ops.quote_name
+
+        输出信息
         output = ['%s %s;' % (style.SQL_KEYWORD('DROP TABLE'),
                               style.SQL_TABLE(qn(model._meta.db_table)))]
+
+        删除约束??? 不懂: 关于为什么在删除表过后还要删除约束: http://bbs.csdn.net/topics/380254293
         if model in references_to_delete:
             output.extend(self.sql_remove_table_constraints(
                 model, references_to_delete, style))
+
+        删除自增键??? 不懂
         if model._meta.has_auto_field:
             ds = self.connection.ops.drop_sequence_sql(model._meta.db_table)
             if ds:
                 output.append(ds)
+
         return output
 
     def sql_remove_table_constraints(self, model, references_to_delete, style):
+
         from django.db.backends.util import truncate_name
+
         if not model._meta.managed or model._meta.proxy or model._meta.swapped:
             return []
+
         output = []
-        qn = self.connection.ops.quote_name
+
+        qn = self.connection.ops.quote_name ''
+
         for rel_class, f in references_to_delete[model]:
             table = rel_class._meta.db_table
             col = f.column
             r_table = model._meta.db_table
             r_col = model._meta.get_field(f.rel.field_name).column
+
             r_name = '%s_refs_%s_%s' % (
                 col, r_col, self._digest(table, r_table))
+
             output.append('%s %s %s %s;' % \
                 (style.SQL_KEYWORD('ALTER TABLE'),
                 style.SQL_TABLE(qn(table)),
                 style.SQL_KEYWORD(self.connection.ops.drop_foreignkey_sql()),
                 style.SQL_FIELD(qn(truncate_name(
                     r_name, self.connection.ops.max_name_length())))))
-        del references_to_delete[model]
+
+        del references_to_delete[model] 在引用列表中删除
         return output
 
     def create_test_db(self, verbosity=1, autoclobber=False):
         """
+        创建测试数据库, 当数据库已经存在的时候提示用户
+
         Creates a test database, prompting the user for confirmation if the
         database already exists. Returns the name of the test database created.
         """
@@ -286,9 +348,12 @@ class BaseDatabaseCreation(object):
         # Report syncdb messages at one level lower than that requested.
         # This ensures we don't get flooded with messages during testing
         # (unless you really ask to be flooded)
+
+        # from django.core.management import call_command
+        # def call_command(name, *args, **options): 命令执行的入口
         call_command('syncdb',
             verbosity=max(verbosity - 1, 0),
-            interactive=False,
+            interactive=False, 交互???
             database=self.connection.alias,
             load_initial_data=False)
 
@@ -302,17 +367,20 @@ class BaseDatabaseCreation(object):
             interactive=False,
             database=self.connection.alias)
 
+        # 如果换存策略是基于数据库的, 就创建数据库缓存
         from django.core.cache import get_cache
         from django.core.cache.backends.db import BaseDatabaseCache
         for cache_alias in settings.CACHES:
+
             cache = get_cache(cache_alias)
+
             if isinstance(cache, BaseDatabaseCache):
                 call_command('createcachetable', cache._table,
                              database=self.connection.alias)
 
         # Get a cursor (even though we don't need one yet). This has
         # the side effect of initializing the test database.
-        self.connection.cursor()
+        self.connection.cursor() # Create a cursor on which queries may be performed.
 
         return test_database_name
 
@@ -333,6 +401,7 @@ class BaseDatabaseCreation(object):
         """
         suffix = self.sql_table_creation_suffix()
 
+        # 在 create_test_db() 已经调用了一次, 在调用一次浪费???
         test_database_name = self._get_test_db_name()
 
         qn = self.connection.ops.quote_name
@@ -341,6 +410,7 @@ class BaseDatabaseCreation(object):
         # if the database supports it because PostgreSQL doesn't allow
         # CREATE/DROP DATABASE statements within transactions.
         cursor = self.connection.cursor()
+
         self._prepare_for_test_db_ddl()
         try:
             cursor.execute(
@@ -369,6 +439,23 @@ class BaseDatabaseCreation(object):
             else:
                 print("Tests cancelled.")
                 sys.exit(1)
+
+        """
+        补充知识:
+        python中try/except/else/finally语句的完整格式如下所示：
+        try:
+             Normal execution block
+        except A:
+             Exception A handle
+        except B:
+             Exception B handle
+        except:
+             Other exception handle
+        else:
+             if no exception,get here
+        finally:
+             print("finally")
+        """
 
         return test_database_name
 
@@ -425,6 +512,8 @@ class BaseDatabaseCreation(object):
 
     def _prepare_for_test_db_ddl(self):
         """
+        内部实现, 在test 被删除之前的工作
+
         Internal implementation - Hook for tasks that should be performed
         before the ``CREATE DATABASE``/``DROP DATABASE`` clauses used by
         testing code to create/ destroy test databases. Needed e.g. in
@@ -434,17 +523,22 @@ class BaseDatabaseCreation(object):
 
     def sql_table_creation_suffix(self):
         """
+        创建 test 数据库的后缀语句\
+
         SQL to append to the end of the test table creation statements.
         """
         return ''
 
     def test_db_signature(self):
         """
+        返回标识数据库的签名
+
         Returns a tuple with elements of self.connection.settings_dict (a
         DATABASES setting value) that uniquely identify a database
         accordingly to the RDBMS particularities.
         """
         settings_dict = self.connection.settings_dict
+        # 如此签名
         return (
             settings_dict['HOST'],
             settings_dict['PORT'],

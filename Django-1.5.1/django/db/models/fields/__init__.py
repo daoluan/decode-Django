@@ -35,12 +35,17 @@ class FieldDoesNotExist(Exception):
     pass
 
 # A guide to Field parameters:
-#
+#   字段的名字
 #   * name:      The name of the field specifed in the model.
+
+    当被用于外键的时候, 需要添加后缀 _id
 #   * attname:   The attribute to use on the model object. This is the same as
 #                "name", except in the case of ForeignKeys, where "_id" is
 #                appended.
+    列名
 #   * db_column: The db_column specified in the model (or None).
+
+    和 attname 一样, 除非 db_column 指定了
 #   * column:    The database column for this field. This is the same as
 #                "attname", except if db_column is specified.
 #
@@ -51,6 +56,8 @@ class FieldDoesNotExist(Exception):
 
 @total_ordering
 class Field(object):
+
+    所有字段的父类
     """Base class for all field types"""
 
     # Designates whether empty strings fundamentally are allowed at the
@@ -60,9 +67,11 @@ class Field(object):
     # These track each time a Field instance is created. Used to retain order.
     # The auto_creation_counter is used for fields that Django implicitly
     # creates, creation_counter is used for all user-specified fields.
-    creation_counter = 0
-    auto_creation_counter = -1
-    default_validators = [] # Default set of validators
+    creation_counter = 0       # 用户创建的字段
+    auto_creation_counter = -1 # django 隐士创建的字段
+
+    default_validators = [] # Default set of validators 默认有效性检测器
+
     default_error_messages = {
         'invalid_choice': _('Value %r is not a valid choice.'),
         'null': _('This field cannot be null.'),
@@ -71,11 +80,13 @@ class Field(object):
                     'already exists.'),
     }
 
+    描述
     # Generic field type description, usually overriden by subclasses
     def _description(self):
         return _('Field of type: %(field_type)s') % {
             'field_type': self.__class__.__name__
         }
+    方便访问
     description = property(_description)
 
     def __init__(self, verbose_name=None, name=None, primary_key=False,
@@ -85,6 +96,8 @@ class Field(object):
             unique_for_year=None, choices=None, help_text='', db_column=None,
             db_tablespace=None, auto_created=False, validators=[],
             error_messages=None):
+
+        # 关于诸多设置, 请参见: https://docs.djangoproject.com/en/dev/howto/custom-model-fields/
         self.name = name
         self.verbose_name = verbose_name
         self.primary_key = primary_key
@@ -107,6 +120,7 @@ class Field(object):
         # explicitly set db_index.
         self.db_index = db_index
 
+        当出现 model 出现继承关系的时候, 可能父类和子类的数据会在不同的表中存储, 两个表之间用主键关联, 这就是 OnetoOne Field
         # Adjust the appropriate creation counter, and save our local copy.
         if auto_created:
             self.creation_counter = Field.auto_creation_counter
@@ -123,6 +137,7 @@ class Field(object):
         messages.update(error_messages or {})
         self.error_messages = messages
 
+    为排序做准备
     def __eq__(self, other):
         # Needed for @total_ordering
         if isinstance(other, Field):
@@ -139,6 +154,7 @@ class Field(object):
         return hash(self.creation_counter)
 
     def __deepcopy__(self, memodict):
+        不需要深度复制, 只复制了一部分
         # We don't have to deepcopy very much here, since most things are not
         # intended to be altered after initial creation.
         obj = copy.copy(self)
@@ -149,20 +165,21 @@ class Field(object):
 
     def to_python(self, value):
         """
+        转换为 python 中的串
         Converts the input value into the expected Python data type, raising
         django.core.exceptions.ValidationError if the data can't be converted.
         Returns the converted value. Subclasses should override this.
         """
-        return value
+        return value ???
 
     def run_validators(self, value):
-        if value in validators.EMPTY_VALUES:
+        if value in validators.EMPTY_VALUES: 空不许要检测
             return
 
         errors = []
         for v in self.validators:
             try:
-                v(value)
+                v(value) 检测, 异常
             except exceptions.ValidationError as e:
                 if hasattr(e, 'code') and e.code in self.error_messages:
                     message = self.error_messages[e.code]
@@ -178,6 +195,8 @@ class Field(object):
         """
         Validates value and throws ValidationError. Subclasses should override
         this to provide validation logic.
+
+        子类需要提供具体的逻辑
         """
         if not self.editable:
             # Skip validation for non-editable fields.
@@ -208,9 +227,9 @@ class Field(object):
         from to_python and validate are propagated. The correct value is
         returned if no error is raised.
         """
-        value = self.to_python(value)
-        self.validate(value, model_instance)
-        self.run_validators(value)
+        value = self.to_python(value) 转换为 python 字符串
+        self.validate(value, model_instance) 有效性检测
+        self.run_validators(value) 各种检测器
         return value
 
     def db_type(self, connection):
@@ -233,6 +252,8 @@ class Field(object):
         # mapped to one of the built-in Django field types. In this case, you
         # can implement db_type() instead of get_internal_type() to specify
         # exactly which wacky database column type you want to use.
+
+        # from django.utils.datastructures import DictWrapper
         data = DictWrapper(self.__dict__, connection.ops.quote_name, "qn_")
         try:
             return (connection.creation.data_types[self.get_internal_type()]
@@ -384,12 +405,14 @@ class Field(object):
 
     def get_default(self):
         """
-        Returns the default value for this field.
+        Returns the default value for this field. 返回默认值
         """
         if self.has_default():
             if callable(self.default):
                 return self.default()
+
             return force_text(self.default, strings_only=True)
+
         if (not self.empty_strings_allowed or (self.null and
                    not connection.features.interprets_empty_strings_as_nulls)):
             return None
@@ -467,17 +490,20 @@ class Field(object):
 
     def formfield(self, form_class=forms.CharField, **kwargs):
         """
+        表单字段
         Returns a django.forms.Field instance for this database Field.
         """
         defaults = {'required': not self.blank,
                     'label': capfirst(self.verbose_name),
                     'help_text': self.help_text}
+
         if self.has_default():
             if callable(self.default):
                 defaults['initial'] = self.default
                 defaults['show_hidden_initial'] = True
             else:
                 defaults['initial'] = self.get_default()
+
         if self.choices:
             # Fields with choices get special treatment.
             include_blank = (self.blank or
@@ -493,13 +519,14 @@ class Field(object):
             for k in list(kwargs):
                 if k not in ('coerce', 'empty_value', 'choices', 'required',
                              'widget', 'label', 'initial', 'help_text',
-                             'error_messages', 'show_hidden_initial'):
+                             'error_messages', 'show_hidden_initial'): 住需要某些键
                     del kwargs[k]
         defaults.update(kwargs)
         return form_class(**defaults)
 
     def value_from_object(self, obj):
         """
+        返回给定的模块中的字段
         Returns the value of this field in the given model instance.
         """
         return getattr(obj, self.attname)

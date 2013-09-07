@@ -15,7 +15,7 @@ from django.utils.importlib import import_module
 from django.utils import six
 from django.utils.timezone import is_aware
 
-
+数据库包装类, 关于的数据库的基本操作函数
 class BaseDatabaseWrapper(object):
     """
     Represents a database connection.
@@ -359,7 +359,7 @@ class BaseDatabaseWrapper(object):
     def make_debug_cursor(self, cursor):
         return util.CursorDebugWrapper(cursor, self)
 
-
+数据库特性
 class BaseDatabaseFeatures(object):
     allows_group_by_pk = False
 
@@ -447,11 +447,12 @@ class BaseDatabaseFeatures(object):
     # Is there a 1000 item limit on query parameters?
     supports_1000_query_parameters = True
 
-    # Can an object have a primary key of 0? MySQL says No.
+    # Can an object have a primary key of 0? MySQL says No. MySQL 不允许使用 0 作为主键
     allows_primary_key_0 = True
 
     # Do we need to NULL a ForeignKey out, or can the constraint check be
     # deferred
+    # 外键约束可否延迟检测
     can_defer_constraint_checks = False
 
     # date_interval_sql can properly handle mixed Date/DateTime fields and timedeltas
@@ -510,7 +511,7 @@ class BaseDatabaseFeatures(object):
         except NotImplementedError:
             return False
 
-
+数据库操作类
 class BaseDatabaseOperations(object):
     """
     This class encapsulates 压缩 all backend-specific differences, such as the way
@@ -576,6 +577,7 @@ class BaseDatabaseOperations(object):
         """
         raise NotImplementedError()
 
+    # 时间映射成 sql
     def datetime_cast_sql(self):
         """
         Returns the SQL necessary to cast a datetime value so that it will be
@@ -594,12 +596,14 @@ class BaseDatabaseOperations(object):
         """
         return ''
 
+    # 检测是否 distinct
     def distinct_sql(self, fields):
         """
         Returns an SQL DISTINCT clause which removes duplicate rows from the
         result set. If any fields are given, only the given fields are being
         checked for duplicates.
         """
+
         if fields:
             raise NotImplementedError('DISTINCT ON fields is not supported by this database backend')
         else:
@@ -613,13 +617,14 @@ class BaseDatabaseOperations(object):
 
     def drop_sequence_sql(self, table):
         """
-        Returns any SQL necessary to drop the sequence for the given table.
+        Returns any SQL necessary to drop the sequence for the given table. 删除
         Returns None if no SQL is necessary.
         """
         return None
 
     def fetch_returned_insert_id(self, cursor):
         """
+        对于指定的游标, 返回最新创建的 id
         Given a cursor object that has just performed an INSERT...RETURNING
         statement into a table that has an auto-incrementing ID, returns the
         newly created ID.
@@ -637,6 +642,8 @@ class BaseDatabaseOperations(object):
 
     def force_no_ordering(self):
         """
+        强制无序
+
         Returns a list used in the "ORDER BY" clause to force no ordering at
         all. Returning an empty list means that nothing will be included in the
         ordering.
@@ -660,8 +667,10 @@ class BaseDatabaseOperations(object):
         """
         raise NotImplementedError('Full-text search is not implemented for this database backend')
 
+    不懂
     def last_executed_query(self, cursor, sql, params):
         """
+        返回最后执行的 sql
         Returns a string of the query last executed by the given cursor, with
         placeholders replaced with actual values.
 
@@ -673,6 +682,7 @@ class BaseDatabaseOperations(object):
         from django.utils.encoding import force_text
 
         # Convert params to contain Unicode values.
+        # 可以得到提示 force_text() 是将字符串转换为 unicode
         to_unicode = lambda s: force_text(s, strings_only=True, errors='replace')
         if isinstance(params, (list, tuple)):
             u_params = tuple([to_unicode(val) for val in params])
@@ -683,6 +693,7 @@ class BaseDatabaseOperations(object):
 
     def last_insert_id(self, cursor, table_name, pk_name):
         """
+        返回最新创建的 id
         Given a cursor object that has just performed an INSERT statement into
         a table that has an auto-incrementing ID, returns the newly created ID.
 
@@ -693,6 +704,8 @@ class BaseDatabaseOperations(object):
 
     def lookup_cast(self, lookup_type):
         """
+        "contains", "like" 语句
+
         Returns the string to use in a query when performing lookups
         ("contains", "like", etc). The resulting string should contain a '%s'
         placeholder for the column being searched against.
@@ -701,6 +714,8 @@ class BaseDatabaseOperations(object):
 
     def max_in_list_size(self):
         """
+        a single 'IN' 的最大容量
+
         Returns the maximum number of items that can be passed in a single 'IN'
         list condition, or None if the backend does not impose a limit.
         """
@@ -722,6 +737,8 @@ class BaseDatabaseOperations(object):
 
     def pk_default_value(self):
         """
+        主键的默认值
+
         Returns the value to use during an INSERT statement to specify that
         the field should use its default value.
         """
@@ -764,10 +781,11 @@ class BaseDatabaseOperations(object):
         """
         Returns a SQL expression that returns a random value.
         """
-        return 'RANDOM()'
+        return 'RANDOM()' 默认使用这个函数
 
     def regex_lookup(self, lookup_type):
         """
+        正则表达式创造, 返回 sql
         Returns the string to use in a query when performing regular expression
         lookups (using "regex" or "iregex"). The resulting string should
         contain a '%s' placeholder for the column being searched against.
@@ -805,6 +823,7 @@ class BaseDatabaseOperations(object):
         """
         return ''
 
+    不懂
     def sql_flush(self, style, tables, sequences):
         """
         Returns a list of SQL statements required to remove all data from
@@ -819,6 +838,7 @@ class BaseDatabaseOperations(object):
         """
         raise NotImplementedError()
 
+    不懂
     def sequence_reset_by_name_sql(self, style, sequences):
         """
         Returns a list of the SQL statements required to reset sequences
@@ -828,7 +848,7 @@ class BaseDatabaseOperations(object):
         color_style() or no_style() in django.core.management.color.
         """
         return []
-
+    不懂
     def sequence_reset_sql(self, style, model_list):
         """
         Returns a list of the SQL statements required to reset sequences for
@@ -839,12 +859,13 @@ class BaseDatabaseOperations(object):
         """
         return []  # No sequence reset required by default.
 
+    # 事务开始的语句
     def start_transaction_sql(self):
         """
         Returns the SQL statement required to start a transaction.
         """
         return "BEGIN;"
-
+    # 事务结束的语句
     def end_transaction_sql(self, success=True):
         if not success:
             return "ROLLBACK;"
@@ -861,6 +882,7 @@ class BaseDatabaseOperations(object):
         """
         return ''
 
+    # 对 like 语句的处理, 将 _　和　％　转义
     def prep_for_like_query(self, x):
         """Prepares a value for use in a LIKE query."""
         from django.utils.encoding import force_text
@@ -870,6 +892,7 @@ class BaseDatabaseOperations(object):
     # need not necessarily be implemented using "LIKE" in the backend.
     prep_for_iexact_query = prep_for_like_query
 
+    # 自动增长的主键的检查
     def validate_autopk_value(self, value):
         """
         Certain backends do not accept some values for "serial" fields
@@ -918,6 +941,8 @@ class BaseDatabaseOperations(object):
 
     def year_lookup_bounds(self, value):
         """
+        有些搜索是按年来搜索
+
         Returns a two-elements list with the lower and upper bound to be used
         with a BETWEEN operator to query a field value using a year lookup
 
@@ -942,19 +967,25 @@ class BaseDatabaseOperations(object):
 
     def convert_values(self, value, field):
         """
+        将数据库返回的是数据类型转换为持久化对象
+
         Coerce the value returned by the database backend into a consistent type
         that is compatible with the field type.
         """
         if value is None:
             return value
+
         internal_type = field.get_internal_type()
+
         if internal_type == 'FloatField':
             return float(value)
         elif (internal_type and (internal_type.endswith('IntegerField')
                                  or internal_type == 'AutoField')):
             return int(value)
+
         return value
 
+    聚合函数检测
     def check_aggregate_support(self, aggregate_func):
         """Check that the backend supports the provided aggregate
 
@@ -980,9 +1011,12 @@ class BaseDatabaseOperations(object):
         """
         return params
 
+数据库内部方法类
 class BaseDatabaseIntrospection(object):
     """
     This class encapsulates all backend-specific introspection utilities
+
+    包装内部方法
     """
     data_types_reverse = {}
 
@@ -1006,6 +1040,8 @@ class BaseDatabaseIntrospection(object):
 
     def table_names(self, cursor=None):
         """
+        返回数据库中的所有表名
+
         Returns a list of names of all tables that exist in the database.
         The returned table list is sorted by Python's default sorting. We
         do NOT use database's ORDER BY here to avoid subtle differences
@@ -1024,23 +1060,33 @@ class BaseDatabaseIntrospection(object):
 
     def django_table_names(self, only_existing=False):
         """
+        返回与 Django 有关且已经在 INSTALLED_APPS 中标明的
+
         Returns a list of all table names that have associated Django models and
         are in INSTALLED_APPS.
 
+        不懂, 什么叫确实存在于数据库的表?
         If only_existing is True, the resulting list will only include the tables
+
         that actually exist in the database.
         """
+
         from django.db import models, router
         tables = set()
+
         for app in models.get_apps():
             for model in models.get_models(app):
-                if not model._meta.managed:
+
+                if not model._meta.managed: #为什么
                     continue
                 if not router.allow_syncdb(self.connection.alias, model):
                     continue
+
                 tables.add(model._meta.db_table)
                 tables.update([f.m2m_db_table() for f in model._meta.local_many_to_many])
+
         tables = list(tables)
+
         if only_existing:
             existing_tables = self.table_names()
             tables = [
@@ -1050,21 +1096,27 @@ class BaseDatabaseIntrospection(object):
             ]
         return tables
 
+    不懂
     def installed_models(self, tables):
         "Returns a set of all models represented by the provided list of table names."
         from django.db import models, router
+
         all_models = []
+
         for app in models.get_apps():
             for model in models.get_models(app):
                 if router.allow_syncdb(self.connection.alias, model):
                     all_models.append(model)
+
         tables = list(map(self.table_name_converter, tables))
+
         return set([
             m for m in all_models
             if self.table_name_converter(m._meta.db_table) in tables
         ])
 
     def sequence_list(self):
+        不懂, 返回数据库所有模块的数据库序列???
         "Returns a list of information about all DB sequences for all models in all apps."
         from django.db import models, router
 
@@ -1073,12 +1125,16 @@ class BaseDatabaseIntrospection(object):
 
         for app in apps:
             for model in models.get_models(app):
+
                 if not model._meta.managed:
                     continue
+
                 if model._meta.swapped:
                     continue
+
                 if not router.allow_syncdb(self.connection.alias, model):
                     continue
+
                 for f in model._meta.local_fields:
                     if isinstance(f, models.AutoField):
                         sequence_list.append({'table': model._meta.db_table, 'column': f.column})
@@ -1094,6 +1150,8 @@ class BaseDatabaseIntrospection(object):
 
     def get_key_columns(self, cursor, table_name):
         """
+        返回 (column_name, referenced_table_name,referenced_column_name)
+
         Backends can override this to return a list of (column_name, referenced_table_name,
         referenced_column_name) for all key columns in given table.
         """
@@ -1101,15 +1159,20 @@ class BaseDatabaseIntrospection(object):
 
     def get_primary_key_column(self, cursor, table_name):
         """
+        返回表的主键
+
         Returns the name of the primary key column for the given table.
         """
         for column in six.iteritems(self.get_indexes(cursor, table_name)):
-            if column[1]['primary_key']:
+            if column[1]['primary_key']: column 应该是个复杂的数据结构, 而且不怎么结构化, 直接用数组来访问???
                 return column[0]
+
         return None
 
     def get_indexes(self, cursor, table_name):
         """
+        返回索引 fieldname -> infodict
+
         Returns a dictionary of indexed fieldname -> infodict for the given
         table, where each infodict is in the format:
             {'primary_key': boolean representing whether it's the primary key,
@@ -1119,11 +1182,13 @@ class BaseDatabaseIntrospection(object):
         """
         raise NotImplementedError
 
-
+数据库客户端类
 class BaseDatabaseClient(object):
     """
     This class encapsulates all backend-specific methods for opening a
     client shell.
+
+    客户端打开方法
     """
     # This should be a string representing the name of the executable
     # (e.g., "psql"). Subclasses must override this.
@@ -1136,10 +1201,12 @@ class BaseDatabaseClient(object):
     def runshell(self):
         raise NotImplementedError()
 
-
+数据库有效性检测类
 class BaseDatabaseValidation(object):
     """
     This class encapsualtes all backend-specific model validation.
+
+    模块有效性检测
     """
     def __init__(self, connection):
         self.connection = connection
