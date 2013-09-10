@@ -7,21 +7,21 @@ Django 源码剖析注释版本. 我在这个项目当中, 整理 django 代码�
 
 进度
 ================
-bin
-conf
-contrib
-core DECODING
-db  DECODING
-dispatch
-forms
-http
-middleware 完成
-shortcuts 完成
-template
-templatetags
-test
-utils
-views 完成
+ - bin
+ - conf
+ - contrib
+ - core DECODING
+ - db  DECODING
+ - dispatch
+ - forms
+ - http
+ - middleware 完成
+ - shortcuts 完成
+ - template
+ - templatetags
+ - test
+ - utils
+ - views 完成
 
 博客总结
 =================
