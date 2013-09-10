@@ -19,7 +19,7 @@ from django import forms
 
 RECURSIVE_RELATIONSHIP_CONSTANT = 'self'
 
-pending_lookups = {}
+pending_lookups = {}  有待查找的 models
 
 
 def add_lazy_relation(cls, field, relation, operation):
@@ -28,18 +28,18 @@ def add_lazy_relation(cls, field, relation, operation):
     i.e.::
 
         class MyModel(Model):
-            fk = ForeignKey("AnotherModel")
+            fk = ForeignKey("AnotherModel") 通过字符串查找类
 
     This string can be:
 
         * RECURSIVE_RELATIONSHIP_CONSTANT (i.e. "self") to indicate a recursive
-          relation.
+          relation. 引用自己的外键
 
         * The name of a model (i.e "AnotherModel") to indicate another model in
-          the same app.
+          the same app. 字符串
 
         * An app-label and model name (i.e. "someapp.AnotherModel") to indicate
-          another model in a different app.
+          another model in a different app. 比如appname.model_name
 
     If the other model hasn't yet been loaded -- almost a given if you're using
     lazy relationships -- then the relation won't be set up until the
@@ -100,7 +100,7 @@ class RelatedField(object):
         # Store the opts for related_query_name()
         self.opts = cls._meta
 
-        if hasattr(sup, 'contribute_to_class'):
+        if hasattr(sup, 'contribute_to_class'): 如果有
             sup.contribute_to_class(cls, name)
 
         if not cls._meta.abstract and self.rel.related_name:
@@ -110,31 +110,41 @@ class RelatedField(object):
                 }
 
         other = self.rel.to
-        if isinstance(other, six.string_types) or other._meta.pk is None:
+        if isinstance(other, six.string_types) or other._meta.pk is None: 没有设置主键
             def resolve_related_class(field, model, cls):
-                field.rel.to = model
+                field.rel.to = model #relate to 比如 foreignkey 中会用到
                 field.do_related_class(model, cls)
             add_lazy_relation(cls, self, other, resolve_related_class)
         else:
             self.do_related_class(other, cls)
 
+    设置关联表名
     def set_attributes_from_rel(self):
+        设置关联属性名
         self.name = self.name or (self.rel.to._meta.object_name.lower() + '_' + self.rel.to._meta.pk.name)
+
+        verbose_name 详细的名称
         if self.verbose_name is None:
             self.verbose_name = self.rel.to._meta.verbose_name
+
         self.rel.field_name = self.rel.field_name or self.rel.to._meta.pk.name
+
 
     def do_related_class(self, other, cls):
         self.set_attributes_from_rel()
         self.related = RelatedObject(other, cls, self)
         if not cls._meta.abstract:
+            子类实现
             self.contribute_to_related_class(other, self.related)
 
+    搜索预备工作, 格式化值
     def get_prep_lookup(self, lookup_type, value):
         if hasattr(value, 'prepare'):
             return value.prepare()
+
         if hasattr(value, '_prepare'):
             return value._prepare()
+
         # FIXME: lt and gt are explicitly allowed to make
         # get_(next/prev)_by_date work; other lookups are not allowed since that
         # gets messy pretty quick. This is a good candidate for some refactoring
@@ -150,8 +160,10 @@ class RelatedField(object):
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
         if not prepared:
             value = self.get_prep_lookup(lookup_type, value)
+
         if hasattr(value, 'get_compiler'):
             value = value.get_compiler(connection=connection)
+
         if hasattr(value, 'as_sql') or hasattr(value, '_as_sql'):
             # If the value has a relabel_aliases method, it will need to
             # be invoked before the final SQL is evaluated
@@ -178,6 +190,7 @@ class RelatedField(object):
             return []
         raise TypeError("Related Field has invalid lookup: %s" % lookup_type)
 
+    取出主键, 有可能主键是某个对象, 必须得到能够比较的值
     def _pk_trace(self, value, prep_func, lookup_type, **kwargs):
         # Value may be a primary key, or an object held in a relation.
         # If it is an object, then we need to get the primary key value for
@@ -227,20 +240,21 @@ class RelatedField(object):
 
 
 class SingleRelatedObjectDescriptor(object):
+    关联表属性???
     # This class provides the functionality that makes the related-object
     # managers available as attributes on a model class, for fields that have
     # a single "remote" value, on the class pointed to by a related field.
     # In the example "place.restaurant", the restaurant attribute is a
     # SingleRelatedObjectDescriptor instance.
     def __init__(self, related):
-        self.related = related
+        self.related = related 关联表
         self.cache_name = related.get_cache_name()
 
     def is_cached(self, instance):
         return hasattr(instance, self.cache_name)
 
     def get_query_set(self, **db_hints):
-        db = router.db_for_read(self.related.model, **db_hints)
+        db = router.db_for_read(self.related.model, **db_hints) 不懂
         return self.related.model._base_manager.using(db)
 
     def get_prefetch_query_set(self, instances):
@@ -249,14 +263,18 @@ class SingleRelatedObjectDescriptor(object):
         instances_dict = dict((instance_attr(inst), inst) for inst in instances)
         params = {'%s__pk__in' % self.related.field.name: list(instances_dict)}
         qs = self.get_query_set(instance=instances[0]).filter(**params)
+
         # Since we're going to assign directly in the cache,
         # we must manage the reverse relation cache manually.
         rel_obj_cache_name = self.related.field.get_cache_name()
+
         for rel_obj in qs:
             instance = instances_dict[rel_obj_attr(rel_obj)]
             setattr(rel_obj, rel_obj_cache_name, instance)
+
         return qs, rel_obj_attr, instance_attr, True, self.cache_name
 
+    不懂
     def __get__(self, instance, instance_type=None):
         if instance is None:
             return self
@@ -308,6 +326,7 @@ class SingleRelatedObjectDescriptor(object):
                                         (value, instance._state.db, value._state.db))
 
         related_pk = getattr(instance, self.related.field.rel.get_related_field().attname)
+
         if related_pk is None:
             raise ValueError('Cannot assign "%r": "%s" instance isn\'t saved in the database.' %
                                 (value, instance._meta.object_name))
@@ -919,12 +938,16 @@ class ManyToOneRel(object):
             to._meta
         except AttributeError:  # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
             assert isinstance(to, six.string_types), "'to' must be either a model, a model name or the string %r" % RECURSIVE_RELATIONSHIP_CONSTANT
+
         self.to, self.field_name = to, field_name
-        self.related_name = related_name
+        self.related_name = related_name 关联名
+
         if limit_choices_to is None:
             limit_choices_to = {}
         self.limit_choices_to = limit_choices_to
-        self.multiple = True
+
+        self.multiple = True #和 class OneToOneRel 区分的属性
+
         self.parent_link = parent_link
         self.on_delete = on_delete
 
@@ -932,12 +955,14 @@ class ManyToOneRel(object):
         "Should the related object be hidden?"
         return self.related_name and self.related_name[-1] == '+'
 
+    在关联表中取得属性, 在 __init__ 中同时设定了关联表和关联属性
     def get_related_field(self):
         """
         Returns the Field in the 'to' object to which this relationship is
         tied.
         """
         data = self.to._meta.get_field_by_name(self.field_name)
+
         if not data[2]:
             raise FieldDoesNotExist("No related field named '%s'" %
                     self.field_name)
@@ -978,7 +1003,7 @@ class ManyToManyRel(object):
         """
         return self.to._meta.pk
 
-
+注意到 foreignkey 类也是一个 field, 这就不难理解了. 因为外键也可以是表中一个属性.
 class ForeignKey(RelatedField, Field):
     empty_strings_allowed = False
     default_error_messages = {
@@ -986,22 +1011,30 @@ class ForeignKey(RelatedField, Field):
     }
     description = _("Foreign Key (type determined by related field)")
 
+    # to 表示需要关联的表, to_field 关联的属性, rel_class 应该是关联的类型, 默认是一对多
     def __init__(self, to, to_field=None, rel_class=ManyToOneRel, **kwargs):
+
         try:
             to_name = to._meta.object_name.lower()
         except AttributeError:  # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
             assert isinstance(to, six.string_types), "%s(%r) is invalid. First parameter to ForeignKey must be either a model, a model name, or the string %r" % (self.__class__.__name__, to, RECURSIVE_RELATIONSHIP_CONSTANT)
-        else:
+
+        else: 成功
             assert not to._meta.abstract, "%s cannot define a relation with abstract class %s" % (self.__class__.__name__, to._meta.object_name)
             # For backwards compatibility purposes, we need to *try* and set
             # the to_field during FK construction. It won't be guaranteed to
             # be correct until contribute_to_class is called. Refs #12190.
+
+            to_field 如果没有设置, 那就找关联表中的属性
             to_field = to_field or (to._meta.pk and to._meta.pk.name)
+
+        你可以在 Foreign() 构造过程中设定 verbose_name 详细名称
         kwargs['verbose_name'] = kwargs.get('verbose_name', None)
 
         if 'db_index' not in kwargs:
             kwargs['db_index'] = True
 
+        看吧, rel 在这里, 原来 rel 里保存着下面的东西
         kwargs['rel'] = rel_class(to, to_field,
             related_name=kwargs.pop('related_name', None),
             limit_choices_to=kwargs.pop('limit_choices_to', None),
@@ -1010,23 +1043,30 @@ class ForeignKey(RelatedField, Field):
         )
         Field.__init__(self, **kwargs)
 
+    检测
     def validate(self, value, model_instance):
         if self.rel.parent_link:
             return
+
         super(ForeignKey, self).validate(value, model_instance)
         if value is None:
             return
 
         using = router.db_for_read(model_instance.__class__, instance=model_instance)
+
         qs = self.rel.to._default_manager.using(using).filter(
                 **{self.rel.field_name: value}
              )
+
+        # self.rel.limit_choices_to 的作用: A dictionary of lookup arguments and values (see Making queries) that limit the available admin or ModelForm choices for this object.
         qs = qs.complex_filter(self.rel.limit_choices_to)
+
         if not qs.exists():
             raise exceptions.ValidationError(self.error_messages['invalid'] % {
                 'model': self.rel.to._meta.verbose_name, 'pk': value})
 
     def get_attname(self):
+        self.name 是关联属性名, 在 RelatedObject 中定义
         return '%s_id' % self.name
 
     def get_validator_unique_lookup_type(self):
@@ -1035,10 +1075,13 @@ class ForeignKey(RelatedField, Field):
     def get_default(self):
         "Here we check if the default value is an object and return the to_field if so."
         field_default = super(ForeignKey, self).get_default()
+
         if isinstance(field_default, self.rel.to):
             return getattr(field_default, self.rel.get_related_field().attname)
+
         return field_default
 
+    # 有关 get_db_prep_save(): Same as the above, but called when the Field value must be saved to the database. 当数据需要保存的时候会调用. As the default implementation just calls get_db_prep_value(), you shouldn’t need to implement this method unless your custom field needs a special conversion when being saved that is not the same as the conversion used for normal query parameters (which is implemented by get_db_prep_value()).
     def get_db_prep_save(self, value, connection):
         if value == '' or value == None:
             return None
@@ -1058,15 +1101,19 @@ class ForeignKey(RelatedField, Field):
                     return smart_text(choice_list[1][0])
         return Field.value_to_string(self, obj)
 
+    不懂
     def contribute_to_class(self, cls, name):
         super(ForeignKey, self).contribute_to_class(cls, name)
+
+        往 cls 中添加属性, 值是 ReverseSingleRelatedObjectDescriptor() 对象
         setattr(cls, self.name, ReverseSingleRelatedObjectDescriptor(self))
+
         if isinstance(self.rel.to, six.string_types):
-            target = self.rel.to
+            target = self.rel.to 如果只是个字符串
         else:
             target = self.rel.to._meta.db_table
         cls._meta.duplicate_targets[self.column] = (target, "o2m")
-
+    不懂
     def contribute_to_related_class(self, cls, related):
         # Internal FK's - i.e., those with a related name ending with '+' -
         # and swapped models don't get a related descriptor.
@@ -1077,6 +1124,7 @@ class ForeignKey(RelatedField, Field):
         if self.rel.field_name is None:
             self.rel.field_name = cls._meta.pk.name
 
+    和表单有关
     def formfield(self, **kwargs):
         db = kwargs.pop('using', None)
         if isinstance(self.rel.to, six.string_types):
@@ -1106,7 +1154,7 @@ class ForeignKey(RelatedField, Field):
             return IntegerField().db_type(connection=connection)
         return rel_field.db_type(connection=connection)
 
-
+OneToOneField 和 ForeignKey 非常相似, 直接继承, 添加唯一约束, 当一个表属性过多, 可以用两个表来表示, 这时候需要用到 OneToOneField
 class OneToOneField(ForeignKey):
     """
     A OneToOneField is essentially the same as a ForeignKey, with the exception
@@ -1117,7 +1165,7 @@ class OneToOneField(ForeignKey):
     description = _("One-to-one relationship")
 
     def __init__(self, to, to_field=None, **kwargs):
-        kwargs['unique'] = True
+        kwargs['unique'] = True 与 ForeignKey 的不同之处
         super(OneToOneField, self).__init__(to, to_field, OneToOneRel, **kwargs)
 
     def contribute_to_related_class(self, cls, related):
@@ -1135,7 +1183,7 @@ class OneToOneField(ForeignKey):
         else:
             setattr(instance, self.attname, data)
 
-
+当一个多对多的关联出现, 且未由 through 指定外部自定义管理表的时候, 此函数会被调用创建一个多对多管理表
 def create_many_to_many_intermediary_model(field, klass):
     from django.db import models
     managed = True
@@ -1145,7 +1193,10 @@ def create_many_to_many_intermediary_model(field, klass):
 
         def set_managed(field, model, cls):
             field.rel.through._meta.managed = model._meta.managed or cls._meta.managed
+
+        通过字符串查找
         add_lazy_relation(klass, field, to_model, set_managed)
+
     elif isinstance(field.rel.to, six.string_types):
         to = klass._meta.object_name
         to_model = klass
@@ -1154,16 +1205,23 @@ def create_many_to_many_intermediary_model(field, klass):
         to = field.rel.to._meta.object_name
         to_model = field.rel.to
         managed = klass._meta.managed or to_model._meta.managed
+
     name = '%s_%s' % (klass._meta.object_name, field.name)
-    if field.rel.to == RECURSIVE_RELATIONSHIP_CONSTANT or to == klass._meta.object_name:
+
+    if field.rel.to == RECURSIVE_RELATIONSHIP_CONSTANT or to == klass._meta.object_name: 自己和自己关联
         from_ = 'from_%s' % to.lower()
         to = 'to_%s' % to.lower()
     else:
         from_ = klass._meta.object_name.lower()
         to = to.lower()
+
     meta = type('Meta', (object,), {
         'db_table': field._get_m2m_db_table(klass._meta),
+
+        # 有关 managed 选项:
+        # https://docs.djangoproject.com/en/dev/ref/models/options/#managed
         'managed': managed,
+
         'auto_created': klass,
         'app_label': klass._meta.app_label,
         'db_tablespace': klass._meta.db_tablespace,
@@ -1171,7 +1229,8 @@ def create_many_to_many_intermediary_model(field, klass):
         'verbose_name': '%(from)s-%(to)s relationship' % {'from': from_, 'to': to},
         'verbose_name_plural': '%(from)s-%(to)s relationships' % {'from': from_, 'to': to},
     })
-    # Construct and return the new class.
+
+    # Construct and return the new class. 返回动态创建的 model
     return type(name, (models.Model,), {
         'Meta': meta,
         '__module__': klass.__module__,
@@ -1185,6 +1244,7 @@ class ManyToManyField(RelatedField, Field):
 
     def __init__(self, to, **kwargs):
         try:
+            不懂, 为什么要做此检测
             assert not to._meta.abstract, "%s cannot define a relation with abstract class %s" % (self.__class__.__name__, to._meta.object_name)
         except AttributeError:  # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
             assert isinstance(to, six.string_types), "%s(%r) is invalid. First parameter to ManyToManyField must be either a model, a model name, or the string %r" % (self.__class__.__name__, to, RECURSIVE_RELATIONSHIP_CONSTANT)
@@ -1200,9 +1260,23 @@ class ManyToManyField(RelatedField, Field):
             symmetrical=kwargs.pop('symmetrical', to == RECURSIVE_RELATIONSHIP_CONSTANT),
             through=kwargs.pop('through', None))
 
+        这个参数应该很关键
         self.db_table = kwargs.pop('db_table', None)
+
+        """
+        有关 through:
+        ManyToManyField.through
+        Django will automatically generate a table to manage many-to-many relationships. However, if you want to manually specify the intermediary table, you can use the through option to specify the Django model that represents the intermediate table that you want to use.
+        The most common use for this option is when you want to associate extra data with a many-to-many relationship.
+        """
+
         if kwargs['rel'].through is not None:
-            assert self.db_table is None, "Cannot specify a db_table if an intermediary model is used."
+            """
+            有关 db_table:
+            ManyToManyField.db_table
+            The name of the table to create for storing the many-to-many data. If this is not provided, Django will assume a default name based upon the names of: the table for the model defining the relationship and the name of the field itself.
+            """
+            assert self.db_table is None, "Cannot specify a db_table if an intermediary model is used." 当通过 through 指定一个外部的 model 来管理多对多联系时, 不需要指定 db_table
 
         Field.__init__(self, **kwargs)
 
@@ -1212,6 +1286,7 @@ class ManyToManyField(RelatedField, Field):
     def get_choices_default(self):
         return Field.get_choices(self, include_blank=False)
 
+    获取管理多对多的表, 从自动生成的或者 through 指定的 model 中获得, opts 参数是当前两者都没指定的时候使用
     def _get_m2m_db_table(self, opts):
         "Function that can be curried to provide the m2m table name for this relation"
         if self.rel.through is not None:
@@ -1269,6 +1344,7 @@ class ManyToManyField(RelatedField, Field):
                     data = [choices_list[0][0]]
         return smart_text(data)
 
+    # 不懂, 有什么用: 有关 contribute_to_class() 方法的讨论: http://stackoverflow.com/questions/2357528/explanation-of-contribute-to-class
     def contribute_to_class(self, cls, name):
         # To support multiple relations to self, it's useful to have a non-None
         # related name on symmetrical relations for internal reasons. The
@@ -1335,6 +1411,7 @@ class ManyToManyField(RelatedField, Field):
     def save_form_data(self, instance, data):
         setattr(instance, self.attname, data)
 
+    和表单有关
     def formfield(self, **kwargs):
         db = kwargs.pop('using', None)
         defaults = {

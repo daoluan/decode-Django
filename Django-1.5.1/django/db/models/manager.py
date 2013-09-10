@@ -46,7 +46,7 @@ def ensure_default_manager(sender, **kwargs):
 
 signals.class_prepared.connect(ensure_default_manager)
 
-
+# class Manager 一个摆着好看的类, 它强烈的依赖于 class QuerySet, 真正工作的是后者.
 class Manager(object):
     # Tracks each time a Manager instance is created. Used to retain order.
     creation_counter = 0
@@ -83,8 +83,9 @@ class Manager(object):
         Sets the creation counter value for this instance and increments the
         class-level copy.
         """
+        # creation_counter 是类的一个静态变量
         self.creation_counter = Manager.creation_counter
-        Manager.creation_counter += 1
+        Manager.creation_counter += 1 自增1
 
     def _copy_to_model(self, model):
         """
@@ -115,6 +116,7 @@ class Manager(object):
     def get_empty_query_set(self):
         return EmptyQuerySet(self.model, using=self._db)
 
+    # 返回的是一个 QuerySet 对象, 子类可以重写这个方法
     def get_query_set(self):
         """Returns a new QuerySet object.  Subclasses can override this method
         to easily customize the behavior of the Manager.
@@ -196,6 +198,7 @@ class Manager(object):
     def update(self, *args, **kwargs):
         return self.get_query_set().update(*args, **kwargs)
 
+    将记录翻转
     def reverse(self, *args, **kwargs):
         return self.get_query_set().reverse(*args, **kwargs)
 

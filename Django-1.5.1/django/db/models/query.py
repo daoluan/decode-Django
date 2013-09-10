@@ -37,7 +37,7 @@ class QuerySet(object):
         self.model = model
         # EmptyQuerySet instantiates QuerySet with model as None
         self._db = using
-        self.query = query or sql.Query(self.model)
+        self.query = query or sql.Query(self.model) 可以是 Query 对象
         self._result_cache = None
         self._iter = None
         self._sticky_filter = False
@@ -366,6 +366,7 @@ class QuerySet(object):
         If the QuerySet is already fully cached this simply returns the length
         of the cached results set to avoid multiple SELECT COUNT(*) calls.
         """
+        如果已经被缓存
         if self._result_cache is not None and not self._iter:
             return len(self._result_cache)
 

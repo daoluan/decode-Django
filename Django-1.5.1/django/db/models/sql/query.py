@@ -29,7 +29,7 @@ from django.core.exceptions import FieldError
 
 __all__ = ['Query', 'RawQuery']
 
-
+SQL 语句查询
 class RawQuery(object):
     """
     A single raw SQL query
@@ -47,9 +47,11 @@ class RawQuery(object):
         self.extra_select = {}
         self.aggregate_select = {}
 
+    拷贝
     def clone(self, using):
         return RawQuery(self.sql, using, params=self.params)
 
+    将返回结果转化为持久对象
     def convert_values(self, value, field, connection):
         """Convert the database-returned value into a type that is consistent
         across database backends.
@@ -62,7 +64,9 @@ class RawQuery(object):
     def get_columns(self):
         if self.cursor is None:
             self._execute_query()
+
         converter = connections[self.using].introspection.table_name_converter
+
         return [converter(column_meta[0])
                 for column_meta in self.cursor.description]
 
@@ -83,7 +87,7 @@ class RawQuery(object):
 
     def _execute_query(self):
         self.cursor = connections[self.using].cursor()
-        self.cursor.execute(self.sql, self.params)
+        self.cursor.execute(self.sql, self.params) 通过游标执行查询, 此后, self.cursor 便有数据
 
 
 class Query(object):
@@ -96,21 +100,34 @@ class Query(object):
     LOUTER = 'LEFT OUTER JOIN'
 
     alias_prefix = 'T'
+
+    """
+    QUERY_TERMS = set([
+    'exact', 'iexact', 'contains', 'icontains', 'gt', 'gte', 'lt', 'lte', 'in',
+    'startswith', 'istartswith', 'endswith', 'iendswith', 'range', 'year',
+    'month', 'day', 'week_day', 'isnull', 'search', 'regex', 'iregex',
+    ])
+    """
     query_terms = QUERY_TERMS
+
     aggregates_module = base_aggregates_module
 
+    # 有关 SQLCompiler 的资料不多.
     compiler = 'SQLCompiler'
 
     def __init__(self, model, where=WhereNode):
         self.model = model
         self.alias_refcount = {}
-        # alias_map is the most important data structure regarding joins.
+
+        self.alias_map 是关于连接最重要的数据结构, 键即为连接的表
+        # alias_map is the most important data structure regarding joins 有关连接.
         # It's used for recording which joins exist in the query and what
         # type they are. The key is the alias of the joined table (possibly
         # the table name) and the value is JoinInfo from constants.py.
         self.alias_map = {}
         self.table_map = {}     # Maps table names to list of aliases.
         self.join_map = {}
+
         self.default_cols = True
         self.default_ordering = True
         self.standard_ordering = True
@@ -123,9 +140,11 @@ class Query(object):
 
         # SQL-related attributes
         self.select = []
+
         # For each to-be-selected field in self.select there must be a
         # corresponding entry in self.select - git seems to need this.
         self.select_fields = []
+
         self.tables = []    # Aliases in the order they are created.
         self.where = where()
         self.where_class = where
@@ -137,16 +156,24 @@ class Query(object):
         self.distinct_fields = []
         self.select_for_update = False
         self.select_for_update_nowait = False
+
+        """
+        这应为级联查询, 有关 self.select_related 参看如下: select_related()
+        Returns a QuerySet that will automatically “follow” foreign-key relationships, selecting that additional related-object data when it executes its query. This is a performance booster which results in (sometimes much) larger queries but means later use of foreign-key relationships won’t require database queries.
+        """
         self.select_related = False
+
+        # 需要级联查询的属性
         self.related_select_cols = []
 
-        # SQL aggregate-related attributes
+        # SQL aggregate-related attributes 聚合属性
         self.aggregates = SortedDict() # Maps alias -> SQL aggregate function
         self.aggregate_select_mask = None
         self._aggregate_select_cache = None
 
         # Arbitrary maximum limit for select_related. Prevents infinite
         # recursion. Can be changed by the depth parameter to select_related().
+        可以理解为级联查询的深度, 就像 DFS 的深度一样
         self.max_depth = 5
 
         # These are for extensions. The contents are more or less appended
@@ -174,6 +201,7 @@ class Query(object):
         sql, params = self.sql_with_params()
         return sql % params
 
+    不懂
     def sql_with_params(self):
         """
         Returns the query as an SQL string and the parameters that will be
@@ -194,6 +222,7 @@ class Query(object):
         obj_dict['related_select_fields'] = []
         obj_dict['related_select_cols'] = []
 
+        如果属性已经指定, 就只查询指定的属性
         # Fields can't be pickled, so if a field list has been
         # specified, we pickle the list of field names instead.
         # None is also a possible value; that can pass as-is
@@ -219,6 +248,7 @@ class Query(object):
     def prepare(self):
         return self
 
+    构造编译器, 不懂
     def get_compiler(self, using=None, connection=None):
         if using is None and connection is None:
             raise ValueError("Need either using or connection")
@@ -229,8 +259,10 @@ class Query(object):
         for alias, aggregate in self.aggregate_select.items():
             connection.ops.check_aggregate_support(aggregate)
 
+        构造一个 SQL 编译器
         return connection.ops.compiler(self.compiler)(self, connection, using)
 
+    不懂
     def get_meta(self):
         """
         Returns the Options instance (the model._meta) from which to start
@@ -320,6 +352,7 @@ class Query(object):
         """
         return connection.ops.convert_values(value, field)
 
+    将聚合的结果转化为持久化类型
     def resolve_aggregate(self, value, aggregate, connection):
         """Resolve the value of aggregates returned by the database to
         consistent (and reasonable) types.
@@ -342,6 +375,7 @@ class Query(object):
             # Return value depends on the type of the field being processed.
             return self.convert_values(value, aggregate.field, connection)
 
+    完全不懂
     def get_aggregation(self, using):
         """
         Returns the dictionary with the values of the existing aggregations.
@@ -398,9 +432,11 @@ class Query(object):
 
     def get_count(self, using):
         """
+        执行 count()
         Performs a COUNT() query using the current filter constraints.
         """
         obj = self.clone()
+
         if len(self.select) > 1 or self.aggregate_select or (self.distinct and self.distinct_fields):
             # If a select clause exists, then the query has already started to
             # specify the columns that are to be returned.
@@ -419,18 +455,20 @@ class Query(object):
                 # count is obviously 0
                 return 0
 
-        obj.add_count_column()
+        obj.add_count_column() 添加总计属性??? 不懂
         number = obj.get_aggregation(using=using)[None]
 
         # Apply offset and limit constraints manually, since using LIMIT/OFFSET
         # in SQL (in variants that provide them) doesn't change the COUNT
         # output.
+        可能 SQL 中会有 limit 或者 offset 关键字
         number = max(0, number - self.low_mark)
         if self.high_mark is not None:
             number = min(number, self.high_mark - self.low_mark)
 
         return number
 
+    测试是否有查询结果??? 不懂
     def has_results(self, using):
         q = self.clone()
         q.clear_select_clause()
@@ -441,6 +479,7 @@ class Query(object):
         compiler = q.get_compiler(using=using)
         return bool(compiler.execute_sql(SINGLE))
 
+    合并结果??? 不懂
     def combine(self, rhs, connector):
         """
         Merge the 'rhs' query into the current one (with any 'rhs' effects
@@ -464,17 +503,22 @@ class Query(object):
         change_map = {}
         used = set()
         conjunction = (connector == AND)
+
         # Add the joins in the rhs query into the new query.
         first = True
+
         for alias in rhs.tables:
-            if not rhs.alias_refcount[alias]:
+            if not rhs.alias_refcount[alias]: 别名引用计数
                 # An unused alias.
                 continue
+
             table, _, join_type, lhs, lhs_col, col, _ = rhs.alias_map[alias]
             promote = join_type == self.LOUTER
+
             # If the left side of the join was already relabeled, use the
             # updated alias.
             lhs = change_map.get(lhs, lhs)
+
             new_alias = self.join((lhs, table, lhs_col, col),
                     conjunction and not first, used, promote, not conjunction)
             used.add(new_alias)
@@ -485,8 +529,11 @@ class Query(object):
         # all joins exclusive to either the lhs or the rhs must be converted
         # to an outer join.
         if not conjunction:
+
+            都是集合
             l_tables = set(self.tables)
             r_tables = set(rhs.tables)
+
             # Update r_tables aliases.
             for alias in change_map:
                 if alias in r_tables:
@@ -495,12 +542,15 @@ class Query(object):
                     # trimmed because only the foreign key is used.
                     # We only need to fix the aliases for the tables that
                     # actually have aliases.
+
                     if rhs.alias_refcount[alias]:
-                        r_tables.remove(alias)
+                        r_tables.remove(alias) 删除某个别名
                         r_tables.add(change_map[alias])
+
             # Find aliases that are exclusive to rhs or lhs.
             # These are promoted to outer joins.
-            outer_tables = (l_tables | r_tables) - (l_tables & r_tables)
+            outer_tables = (l_tables | r_tables) - (l_tables & r_tables) 两个集合求异
+
             for alias in outer_tables:
                 # Again, some of the tables won't have aliases due to
                 # the trimming of unnecessary tables.
@@ -534,6 +584,7 @@ class Query(object):
                 item = copy.deepcopy(col)
                 item.relabel_aliases(change_map)
                 self.select.append(item)
+
         self.select_fields = rhs.select_fields[:]
 
         if connector == OR:
@@ -545,12 +596,16 @@ class Query(object):
                         "cannot have extra(select=...) on both sides.")
         self.extra.update(rhs.extra)
         extra_select_mask = set()
+
         if self.extra_select_mask is not None:
             extra_select_mask.update(self.extra_select_mask)
+
         if rhs.extra_select_mask is not None:
             extra_select_mask.update(rhs.extra_select_mask)
+
         if extra_select_mask:
             self.set_extra_mask(extra_select_mask)
+
         self.extra_tables += rhs.extra_tables
 
         # Ordering uses the 'rhs' ordering, unless it has none, in which case
@@ -558,6 +613,7 @@ class Query(object):
         self.order_by = rhs.order_by and rhs.order_by[:] or self.order_by
         self.extra_order_by = rhs.extra_order_by or self.extra_order_by
 
+    不懂
     def deferred_to_data(self, target, callback):
         """
         Converts the self.deferred_loading data structure to an alternate data
@@ -579,23 +635,33 @@ class Query(object):
         seen = {}
         must_include = {orig_opts.concrete_model: set([orig_opts.pk])}
         for field_name in field_names:
+
+            # LOOKUP_SEP = '__'
             parts = field_name.split(LOOKUP_SEP)
+
             cur_model = self.model
             opts = orig_opts
+
             for name in parts[:-1]:
                 old_model = cur_model
+
                 source = opts.get_field_by_name(name)[0]
+
                 if is_reverse_o2o(source):
                     cur_model = source.model
                 else:
                     cur_model = source.rel.to
+
                 opts = cur_model._meta
+
                 # Even if we're "just passing through" this model, we must add
                 # both the current model's pk and the related reference field
                 # (if it's not a reverse relation) to the things we select.
                 if not is_reverse_o2o(source):
                     must_include[old_model].add(source)
+
                 add_to_dict(must_include, cur_model, opts.pk)
+
             field, model, _, _ = opts.get_field_by_name(parts[-1])
             if model is None:
                 model = cur_model
@@ -640,7 +706,7 @@ class Query(object):
             for model, values in six.iteritems(seen):
                 callback(target, model, values)
 
-
+    不懂
     def deferred_to_columns_cb(self, target, model, fields):
         """
         Callback used by deferred_to_columns(). The "target" parameter should
@@ -649,6 +715,7 @@ class Query(object):
         table = model._meta.db_table
         if table not in target:
             target[table] = set()
+
         for field in fields:
             target[table].add(field.column)
 
@@ -662,30 +729,34 @@ class Query(object):
         most recently created alias for the table (if one exists) is reused.
         """
         current = self.table_map.get(table_name)
-        if not create and current:
+        if not create and current: 如果存在此别名
             alias = current[0]
-            self.alias_refcount[alias] += 1
+            self.alias_refcount[alias] += 1 需要新增引用计数
             return alias, False
 
-        # Create a new alias for this table.
-        if current:
+        # Create a new alias for this table. 需要为表新增别名
+        if current: 如果参数 create 为真, 就新增别名
             alias = '%s%d' % (self.alias_prefix, len(self.alias_map) + 1)
             current.append(alias)
-        else:
+        else: current 不存在, 需要新增键值
             # The first occurence of a table uses the table name directly.
             alias = table_name
             self.table_map[alias] = [alias]
+
         self.alias_refcount[alias] = 1
-        self.tables.append(alias)
+        self.tables.append(alias) 在表中添加 alias 表
         return alias, True
 
+    新增表别名引用计数
     def ref_alias(self, alias):
         """ Increases the reference count for this alias. """
         self.alias_refcount[alias] += 1
 
+    减少表别名引用计数
     def unref_alias(self, alias, amount=1):
         """ Decreases the reference count for this alias. """
         self.alias_refcount[alias] -= amount
+
 
     def promote_joins(self, aliases, unconditional=False):
         """
@@ -695,7 +766,7 @@ class Query(object):
 
         Note about join promotion: When promoting any alias, we make sure all
         joins which start from that alias are promoted, too. When adding a join
-        in join(), we make sure any join added to already existing LOUTER join
+        in join(), we make sure any join added to already existing L OUTER join
         is generated as LOUTER. This ensures we don't ever have broken join
         chains which contain first a LOUTER join, then an INNER JOIN, that is
         this kind of join should never be generated: a LOUTER b INNER c. The
@@ -703,13 +774,17 @@ class Query(object):
         the LOUTER will effectively remove any effect the LOUTER had.
         """
         aliases = list(aliases)
+
         while aliases:
+
             alias = aliases.pop(0)
+
             if self.alias_map[alias].rhs_join_col is None:
                 # This is the base table (first FROM entry) - this table
                 # isn't really joined at all in the query, so we should not
                 # alter its join type.
                 continue
+
             parent_alias = self.alias_map[alias].lhs_alias
             parent_louter = (parent_alias
                 and self.alias_map[parent_alias].join_type == self.LOUTER)
@@ -731,7 +806,7 @@ class Query(object):
         the value passed in :param to_counts:.
         """
         for alias, cur_refcount in self.alias_refcount.copy().items():
-            unref_amount = cur_refcount - to_counts.get(alias, 0)
+            unref_amount = cur_refcount - to_counts.get(alias, 0) 计算需要减少的次数
             self.unref_alias(alias, unref_amount)
 
     def promote_unused_aliases(self, initial_refcounts, used_aliases):
@@ -750,6 +825,7 @@ class Query(object):
     def change_aliases(self, change_map):
         """
         Changes the aliases in change_map (which maps old-alias -> new-alias),
+
         relabelling any references to them in select columns and the where
         clause.
         """
@@ -1038,6 +1114,11 @@ class Query(object):
         Add a single filter to the query. The 'filter_expr' is a pair:
         (filter_string, value). E.g. ('name__contains', 'fred')
 
+        有关 exclude() 请参看: https://docs.djangoproject.com/en/dev/ref/models/querysets/#exclude
+
+        `This example excludes all entries whose pub_date is later than 2005-1-3 AND whose headline is “Hello”:
+        `Entry.objects.exclude(pub_date__gt=datetime.date(2005, 1, 3), headline='Hello')
+
         If 'negate' is True, this is an exclude() filter. It's important to
         note that this method does not negate anything in the where-clause
         object when inserting the filter constraints. This is because negated
@@ -1060,6 +1141,7 @@ class Query(object):
         """
         arg, value = filter_expr
         parts = arg.split(LOOKUP_SEP)
+
         if not parts:
             raise FieldError("Cannot parse keyword query %r" % arg)
 
@@ -1067,18 +1149,21 @@ class Query(object):
         # if necessary.
         lookup_type = 'exact' # Default lookup type
         num_parts = len(parts)
+
         if (len(parts) > 1 and parts[-1] in self.query_terms
             and arg not in self.aggregates):
-            # Traverse the lookup query to distinguish related fields from
+            # Traverse 遍历 the lookup query to distinguish related fields from
             # lookup types.
             lookup_model = self.model
+
             for counter, field_name in enumerate(parts):
                 try:
-                    lookup_field = lookup_model._meta.get_field(field_name)
+                    lookup_field = lookup_model._meta.get_field(field_name) 查找属性
                 except FieldDoesNotExist:
                     # Not a field. Bail out.
                     lookup_type = parts.pop()
                     break
+
                 # Unless we're at the end of the list of lookups, let's attempt
                 # to continue traversing relations.
                 if (counter + 1) < num_parts:
@@ -1095,17 +1180,21 @@ class Query(object):
 
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
         # uses of None as a query value.
+        如果是 exact 查询选项, 就必须有值
         if value is None:
             if lookup_type != 'exact':
                 raise ValueError("Cannot use None as a query value")
             lookup_type = 'isnull'
             value = True
-        elif callable(value):
+
+        elif callable(value): 值还可以是可调用的对象
             value = value()
-        elif isinstance(value, ExpressionNode):
+
+        elif isinstance(value, ExpressionNode): 还可以是一个查询表达式???
             # If value is a query expression, evaluate it
             value = SQLEvaluator(value, self, reuse=can_reuse)
             having_clause = value.contains_aggregate
+
         # For Oracle '' is equivalent to null. The check needs to be done
         # at this stage because join promotion can't be done at compiler
         # stage. Using DEFAULT_DB_ALIAS isn't nice, but it is the best we
@@ -1114,6 +1203,7 @@ class Query(object):
                 lookup_type == 'exact' and value == ''):
             value = True
             lookup_type = 'isnull'
+
         for alias, aggregate in self.aggregates.items():
             if alias in (parts[0], LOOKUP_SEP.join(parts)):
                 entry = self.where_class()
@@ -1140,6 +1230,7 @@ class Query(object):
         table_promote = False
         join_promote = False
 
+        # isnull: Takes either True or False, which correspond to SQL queries of IS NULL and IS NOT NULL, respectively.
         if (lookup_type == 'isnull' and value is True and not negate and
                 len(join_list) > 1):
             # If the comparison is against NULL, we may need to use some left
@@ -1240,18 +1331,22 @@ class Query(object):
         """
         if used_aliases is None:
             used_aliases = self.used_aliases
+
         if hasattr(q_object, 'add_to_query'):
             # Complex custom objects are responsible for adding themselves.
             q_object.add_to_query(self, used_aliases)
+
         else:
             if self.where and q_object.connector != AND and len(q_object) > 1:
                 self.where.start_subtree(AND)
                 subtree = True
             else:
                 subtree = False
+
             connector = AND
             if q_object.connector == OR and not force_having:
                 force_having = self.need_force_having(q_object)
+
             for child in q_object.children:
                 if connector == OR:
                     refcounts_before = self.alias_refcount.copy()
@@ -1276,10 +1371,13 @@ class Query(object):
                     # set just because they don't match anything).
                     self.promote_unused_aliases(refcounts_before, used_aliases)
                 connector = q_object.connector
+
             if q_object.negated:
                 self.where.negate()
+
             if subtree:
                 self.where.end_subtree()
+
         if self.filter_is_sticky:
             self.used_aliases = used_aliases
 
@@ -1288,13 +1386,22 @@ class Query(object):
             process_extras=True):
         """
         Compute the necessary table joins for the passage through the fields
-        given in 'names'. 'opts' is the Options class for the current model
-        (which gives the table we are joining to), 'alias' is the alias for the
-        table we are joining to. If dupe_multis is True, any many-to-many or
+        given in 'names'.
+
+        'opts' is the Options class for the current model
+        (which gives the table we are joining to),
+
+        'alias' is the alias for the
+        table we are joining to.
+        If dupe_multis is True, any many-to-many or
         many-to-one joins will always create a new alias (necessary for
-        disjunctive filters). If can_reuse is not None, it's a list of aliases
+        disjunctive filters).
+
+        If can_reuse is not None, it's a list of aliases
         that can be reused in these joins (nothing else can be reused in this
-        case). Finally, 'negate' is used in the same sense as for add_filter()
+        case).
+
+        Finally, 'negate' is used in the same sense as for add_filter()
         -- it indicates an exclude() filter, or something similar. It is only
         passed in here so that it can be passed to a field's extra_filter() for
         customized behavior.
@@ -1686,6 +1793,7 @@ class Query(object):
                         col = join.lhs_join_col
                         joins = joins[:-1]
                 self.promote_joins(joins[1:])
+
                 self.select.append((final_alias, col))
                 self.select_fields.append(field)
         except MultiJoin:

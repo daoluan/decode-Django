@@ -356,11 +356,15 @@ class Field(object):
                            prepared=False):
         """
         Returns field's value prepared for database lookup.
+
+        根据搜索需求不同需要格式化数据
         """
         if not prepared:
             value = self.get_prep_lookup(lookup_type, value)
+
         if hasattr(value, 'get_compiler'):
             value = value.get_compiler(connection=connection)
+
         if hasattr(value, 'as_sql') or hasattr(value, '_as_sql'):
             # If the value has a relabel_aliases method, it will need to
             # be invoked before the final SQL is evaluated
@@ -488,9 +492,9 @@ class Field(object):
     def save_form_data(self, instance, data):
         setattr(instance, self.name, data)
 
+    返回数据库对应属性的表单字段
     def formfield(self, form_class=forms.CharField, **kwargs):
         """
-        表单字段
         Returns a django.forms.Field instance for this database Field.
         """
         defaults = {'required': not self.blank,
@@ -510,8 +514,10 @@ class Field(object):
                              not (self.has_default() or 'initial' in kwargs))
             defaults['choices'] = self.get_choices(include_blank=include_blank)
             defaults['coerce'] = self.to_python
+
             if self.null:
                 defaults['empty_value'] = None
+
             form_class = forms.TypedChoiceField
             # Many of the subclass-specific formfield arguments (min_value,
             # max_value) don't apply for choice fields, so be sure to only pass
@@ -651,7 +657,7 @@ class CharField(Field):
 
     def __init__(self, *args, **kwargs):
         super(CharField, self).__init__(*args, **kwargs)
-        self.validators.append(validators.MaxLengthValidator(self.max_length))
+        self.validators.append(validators.MaxLengthValidator(self.max_length)) #添加长度检测工具
 
     def get_internal_type(self):
         return "CharField"

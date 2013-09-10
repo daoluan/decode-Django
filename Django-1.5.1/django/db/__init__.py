@@ -13,7 +13,7 @@ if settings.DATABASES and DEFAULT_DB_ALIAS not in settings.DATABASES:
 
 connections = ConnectionHandler(settings.DATABASES)
 
-router = ConnectionRouter(settings.DATABASE_ROUTERS)
+router = ConnectionRouter(settings.DATABASE_ROUTERS) 经查 settings.DATABASE_ROUTERS 为空???
 
 # `connection`, `DatabaseError` and `IntegrityError` are convenient aliases
 # for backend bits.

@@ -51,7 +51,7 @@ def subclass_exception(name, parents, module, attached_to=None):
 
     return type(name, parents, class_dict)
 
-
+ModelBase 是一种类型
 class ModelBase(type):
     """
     Metaclass for all models.
@@ -72,21 +72,41 @@ class ModelBase(type):
         # (excluding Model class itself).
         parents = [b for b in bases if isinstance(b, ModelBase) and
                 not (b.__name__ == 'NewBase' and b.__mro__ == (b, object))]
+
         if not parents:
             return super_new(cls, name, bases, attrs)
 
         # Create the class.
         module = attrs.pop('__module__')
-        new_class = super_new(cls, name, bases, {'__module__': module})
+        new_class = super_new(cls, name, bases, {'__module__': module}) 新建类
+
+        从参数 attrs 中获取 Meta 属性
         attr_meta = attrs.pop('Meta', None)
+
         abstract = getattr(attr_meta, 'abstract', False)
-        if not attr_meta:
+
+        if not attr_meta: 如果 attr_meta 为空
+            """
+            此处关于 Meta, 它是一个类, 可以在定义模块的时候, 添加需要的选项
+            class OrderedPerson(Person):
+                class Meta:
+                    ordering = ["last_name"]
+                    proxy = True
+
+            更多关于 Meta 参见:
+            https://docs.djangoproject.com/en/dev/topics/db/models/
+
+            所以在这里 meta = new_class.Meta
+            """
             meta = getattr(new_class, 'Meta', None)
         else:
+            否则 meta 就是从参数 attrs 中获得的 Meta
             meta = attr_meta
+
         base_meta = getattr(new_class, '_meta', None)
 
         if getattr(meta, 'app_label', None) is None:
+            计算得出应用名
             # Figure out the app_label by looking one level up.
             # For 'django.contrib.sites.models', this would be 'sites'.
             model_module = sys.modules[new_class.__module__]
@@ -94,27 +114,33 @@ class ModelBase(type):
         else:
             kwargs = {}
 
+        """new_class._meta 在这里添加, 值为 Options 对象"""
         new_class.add_to_class('_meta', Options(meta, **kwargs))
+
         if not abstract:
             new_class.add_to_class('DoesNotExist', subclass_exception(str('DoesNotExist'),
                     tuple(x.DoesNotExist
                           for x in parents if hasattr(x, '_meta') and not x._meta.abstract)
                     or (ObjectDoesNotExist,),
                     module, attached_to=new_class))
+
             new_class.add_to_class('MultipleObjectsReturned', subclass_exception(str('MultipleObjectsReturned'),
                     tuple(x.MultipleObjectsReturned
                           for x in parents if hasattr(x, '_meta') and not x._meta.abstract)
                     or (MultipleObjectsReturned,),
                     module, attached_to=new_class))
+
             if base_meta and not base_meta.abstract:
                 # Non-abstract child classes inherit some attributes from their
                 # non-abstract parent (unless an ABC comes before it in the
                 # method resolution order).
                 if not hasattr(meta, 'ordering'):
                     new_class._meta.ordering = base_meta.ordering
+
                 if not hasattr(meta, 'get_latest_by'):
                     new_class._meta.get_latest_by = base_meta.get_latest_by
 
+        # 更多关于 models proxy 请参见: https://docs.djangoproject.com/en/dev/topics/db/models/#proxy-models
         is_proxy = new_class._meta.proxy
 
         # If the model is a proxy, ensure that the base class
@@ -122,6 +148,7 @@ class ModelBase(type):
         if is_proxy and base_meta and base_meta.swapped:
             raise TypeError("%s cannot proxy the swapped model '%s'." % (name, base_meta.swapped))
 
+        # 每一个 model 都有一个 manager, 在 django.db.models.manager 中定义
         if getattr(new_class, '_default_manager', None):
             if not is_proxy:
                 # Multi-table inheritance doesn't inherit default manager from
@@ -130,7 +157,7 @@ class ModelBase(type):
                 new_class._base_manager = None
             else:
                 # Proxy classes do inherit parent's default manager, if none is
-                # set explicitly.
+                # set explicitly. 管理器继承自父类
                 new_class._default_manager = new_class._default_manager._copy_to_model(new_class)
                 new_class._base_manager = new_class._base_manager._copy_to_model(new_class)
 
@@ -140,6 +167,7 @@ class ModelBase(type):
         if m is not None:
             return m
 
+        将所有的属性都添加到 new_class 中
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
             new_class.add_to_class(obj_name, obj)
@@ -151,8 +179,9 @@ class ModelBase(type):
         field_names = set([f.name for f in new_fields])
 
         # Basic setup for proxy models.
-        if is_proxy:
+        if is_proxy: 如果这个类的代理选项为真
             base = None
+
             for parent in [cls for cls in parents if hasattr(cls, '_meta')]:
                 if parent._meta.abstract:
                     if parent._meta.fields:
@@ -163,11 +192,14 @@ class ModelBase(type):
                     raise TypeError("Proxy model '%s' has more than one non-abstract model base class." % name)
                 else:
                     base = parent
+
             if base is None:
                     raise TypeError("Proxy model '%s' has no non-abstract model base class." % name)
+
             if (new_class._meta.local_fields or
                     new_class._meta.local_many_to_many):
                 raise FieldError("Proxy model '%s' contains model fields." % name)
+
             new_class._meta.setup_proxy(base)
             new_class._meta.concrete_model = base._meta.concrete_model
         else:
@@ -177,6 +209,7 @@ class ModelBase(type):
         o2o_map = dict([(f.rel.to, f) for f in new_class._meta.local_fields
                 if isinstance(f, OneToOneField)])
 
+        将父类中的 fields 整合到 new_class 中
         for base in parents:
             original_base = base
             if not hasattr(base, '_meta'):
@@ -194,11 +227,15 @@ class ModelBase(type):
                                      'with field of similar name from '
                                      'base class %r' %
                                         (field.name, name, base.__name__))
+
+            # 更多关于 meta.abstract 请参见: https://docs.djangoproject.com/en/dev/topics/db/models/#abstract-base-classes
             if not base._meta.abstract:
                 # Concrete classes...
                 base = base._meta.concrete_model
+
                 if base in o2o_map:
                     field = o2o_map[base]
+
                 elif not is_proxy:
                     attr_name = '%s_ptr' % base._meta.module_name
                     field = OneToOneField(base, name=attr_name,
@@ -237,7 +274,7 @@ class ModelBase(type):
             # Abstract base models can't be instantiated and don't appear in
             # the list of models for an app. We do the final setup for them a
             # little differently from normal models.
-            attr_meta.abstract = False
+            attr_meta.abstract = False ???
             new_class.Meta = attr_meta
             return new_class
 
@@ -251,6 +288,10 @@ class ModelBase(type):
         return get_model(new_class._meta.app_label, name,
                          seed_cache=False, only_installed=False)
 
+    非成员函数
+    --------
+
+    辅助 __new__
     def copy_managers(cls, base_managers):
         # This is in-place sorting of an Options attribute, but that's fine.
         base_managers.sort()
@@ -260,6 +301,7 @@ class ModelBase(type):
                 new_manager = manager._copy_to_model(cls)
                 cls.add_to_class(mgr_name, new_manager)
 
+    为 cls 设置值为 value 的 name 属性, 如果 value 有 contribute_to_class() 函数将会被调用.
     def add_to_class(cls, name, value):
         if hasattr(value, 'contribute_to_class'):
             value.contribute_to_class(cls, name)
@@ -297,7 +339,7 @@ class ModelBase(type):
                 make_foreign_order_accessors
             )
 
-        # Give the class a docstring -- its definition.
+        # Give the class a docstring -- its definition. 创建一些说明文档
         if cls.__doc__ is None:
             cls.__doc__ = "%s(%s)" % (cls.__name__, ", ".join([f.attname for f in opts.fields]))
 
@@ -315,10 +357,29 @@ class ModelState(object):
     def __init__(self, db=None):
         self.db = db
         # If true, uniqueness validation checks will consider this a new, as-yet-unsaved object.
+        如果为真, 唯一性检测对象将会被视为新的未被保存
+
         # Necessary for correct validation of new instances of objects with explicit (non-auto) PKs.
         # This impacts validation only; it has no effect on the actual save.
         self.adding = True
 
+"""
+??? 在调试 django 的时候, 发现一个奇怪的现象: 在 eclipse 中看到如下
+
+class Model(six.with_metaclass(ModelBase)):
+    objects = django.db.models.manager.Manager()
+    DoesNotExist = Exception
+    MultipleObjectsReturned = Exception
+    _deferred = False
+    def __init__(self, *args, **kwargs):
+        ....
+
+但是明显下面的 Model 并没有定义前面三个成员变量, 不知道是什么时候加入的???
+
+我们经常会用到下面的语句:
+
+modelobject.objects.all() 来获取表中所有的数据, 其中 objects 就是上面 Model.objects 属性.
+"""
 
 class Model(six.with_metaclass(ModelBase)):
     _deferred = False
@@ -329,16 +390,20 @@ class Model(six.with_metaclass(ModelBase)):
         # Set up the storage for instance state
         self._state = ModelState()
 
-        # There is a rather weird disparity here; if kwargs, it's set, then args
+        # There is a rather weird disparity 不一致 here; if kwargs, it's set, then args
         # overrides it. It should be one or the other; don't duplicate the work
         # The reason for the kwargs check is that standard iterator passes in by
         # args, and instantiation for iteration is 33% faster.
+
+        # 上述说明是说, args 和 kwargs 可能会出现选项的重复, 应该尽量使用 kwargs, 因为迭代和实例化的速度都快
+
         args_len = len(args)
         if args_len > len(self._meta.fields):
             # Daft, but matches old exception sans the err msg.
             raise IndexError("Number of args exceeds number of fields")
 
-        fields_iter = iter(self._meta.fields)
+        fields_iter = iter(self._meta.fields) fields 迭代器
+
         if not kwargs:
             # The ordering of the zip calls matter - zip throws StopIteration
             # when an iter throws it. So if the first iter throws it, the second
@@ -347,7 +412,7 @@ class Model(six.with_metaclass(ModelBase)):
             for val, field in zip(args, fields_iter):
                 setattr(self, field.attname, val)
         else:
-            # Slower, kwargs-ready version.
+            # Slower, kwargs-ready version. 将 kwargs 中重复的的选项去掉
             for val, field in zip(args, fields_iter):
                 setattr(self, field.attname, val)
                 kwargs.pop(field.name, None)
@@ -360,6 +425,7 @@ class Model(six.with_metaclass(ModelBase)):
 
         for field in fields_iter:
             is_related_object = False
+
             # This slightly odd construct is so that we can access any
             # data-descriptor object (DeferredAttribute) without triggering its
             # __get__ method.
@@ -367,6 +433,7 @@ class Model(six.with_metaclass(ModelBase)):
                     isinstance(self.__class__.__dict__.get(field.attname), DeferredAttribute)):
                 # This field will be populated on request.
                 continue
+
             if kwargs:
                 if isinstance(field.rel, ManyToOneRel):
                     try:
@@ -395,6 +462,7 @@ class Model(six.with_metaclass(ModelBase)):
                         val = field.get_default()
             else:
                 val = field.get_default()
+
             if is_related_object:
                 # If we are passed a related instance, set it using the
                 # field.name instead of field.attname (e.g. "user" instead of
@@ -460,14 +528,17 @@ class Model(six.with_metaclass(ModelBase)):
         model = self._meta.proxy_for_model
         return (model_unpickle, (model, defers), data)
 
+    获取主键值
     def _get_pk_val(self, meta=None):
         if not meta:
             meta = self._meta
         return getattr(self, meta.pk.attname)
 
+    设置主键值
     def _set_pk_val(self, value):
         return setattr(self, self._meta.pk.attname, value)
 
+    descriptor
     pk = property(_get_pk_val, _set_pk_val)
 
     def serializable_value(self, field_name):
@@ -496,9 +567,12 @@ class Model(six.with_metaclass(ModelBase)):
         The 'force_insert' and 'force_update' parameters can be used to insist
         that the "save" must be an SQL insert or update (or equivalent for
         non-SQL backends), respectively. Normally, they should not be set.
+
+        一般来说, force_update 和 update_fi 集合elds 集合一般不会设置
         """
         using = using or router.db_for_write(self.__class__, instance=self)
         if force_insert and (force_update or update_fields):
+            不能强制插入和更新
             raise ValueError("Cannot force both insert and updating in model saving.")
 
         if update_fields is not None:
@@ -512,14 +586,17 @@ class Model(six.with_metaclass(ModelBase)):
             field_names = set()
 
             for field in self._meta.fields:
-                if not field.primary_key:
+
+                if not field.primary_key: !!!主键是不允许修改的
                     field_names.add(field.name)
 
                     if field.name != field.attname:
                         field_names.add(field.attname)
 
+            求出非 model 的表属性
             non_model_fields = update_fields.difference(field_names)
 
+            如果不为空, 异常
             if non_model_fields:
                 raise ValueError("The following fields do not exist in this "
                                  "model or are m2m fields: %s"
@@ -527,18 +604,24 @@ class Model(six.with_metaclass(ModelBase)):
 
         # If saving to the same database, and this model is deferred, then
         # automatically do a "update_fields" save on the loaded fields.
+        model 的存储可能被延迟
         elif not force_insert and self._deferred and using == self._state.db:
             field_names = set()
+
             for field in self._meta.fields:
-                if not field.primary_key and not hasattr(field, 'through'):
+                if not field.primary_key and not hasattr(field, 'through'): !!! 主键是不允许修改的
                     field_names.add(field.attname)
+
+            算出需要推迟的表属性, 内部是如何实现的?
             deferred_fields = [
                 f.attname for f in self._meta.fields
                 if f.attname not in self.__dict__
                    and isinstance(self.__class__.__dict__[f.attname],
                                   DeferredAttribute)]
 
+            # field_names - deferred_fields 得到需要立即存储的表属性
             loaded_fields = field_names.difference(deferred_fields)
+
             if loaded_fields:
                 update_fields = frozenset(loaded_fields)
 
@@ -549,7 +632,9 @@ class Model(six.with_metaclass(ModelBase)):
     def save_base(self, raw=False, cls=None, origin=None, force_insert=False,
                   force_update=False, using=None, update_fields=None):
         """
-        Does the heavy-lifting involved in saving. Subclasses shouldn't need to
+        子类不能重写
+
+        Does the heavy-lifting 繁重的 involved in saving. Subclasses shouldn't need to
         override this method. It's separate from save() in order to hide the
         need for overrides of save() to pass around internal-only parameters
         ('raw', 'cls', and 'origin').
@@ -557,7 +642,8 @@ class Model(six.with_metaclass(ModelBase)):
         using = using or router.db_for_write(self.__class__, instance=self)
         assert not (force_insert and (force_update or update_fields))
         assert update_fields is None or len(update_fields) > 0
-        if cls is None:
+
+        if cls is None: 可以为空
             cls = self.__class__
             meta = cls._meta
             if not meta.proxy:
@@ -576,10 +662,12 @@ class Model(six.with_metaclass(ModelBase)):
         # We also go through this process to defer the save of proxy objects
         # to their actual underlying model.
         if not raw or meta.proxy:
+
             if meta.proxy:
                 org = cls
             else:
                 org = None
+
             for parent, field in meta.parents.items():
                 # At this point, parent's primary key field may be unknown
                 # (for example, from administration form which doesn't fill
@@ -587,6 +675,7 @@ class Model(six.with_metaclass(ModelBase)):
                 if field and getattr(self, parent._meta.pk.attname) is None and getattr(self, field.attname) is not None:
                     setattr(self, parent._meta.pk.attname, getattr(self, field.attname))
 
+                对父类 model 执行 save_base() ???
                 self.save_base(cls=parent, origin=org, using=using,
                                update_fields=update_fields)
 
@@ -611,17 +700,20 @@ class Model(six.with_metaclass(ModelBase)):
                 non_pks = [f for f in non_pks if f.name in update_fields or f.attname in update_fields]
 
             # First, try an UPDATE. If that doesn't update anything, do an INSERT.
-            pk_val = self._get_pk_val(meta)
+            pk_val = self._get_pk_val(meta) 直接获取主键的值
             pk_set = pk_val is not None
             record_exists = True
             manager = cls._base_manager
-            if pk_set:
+
+            if pk_set: 如果存在主键, 则执行更新操作
                 # Determine if we should do an update (pk already exists, forced update,
                 # no force_insert)
                 if ((force_update or update_fields) or (not force_insert and
                         manager.using(using).filter(pk=pk_val).exists())):
+
                     if force_update or non_pks:
                         values = [(f, None, (raw and getattr(self, f.attname) or f.pre_save(self, False))) for f in non_pks]
+
                         if values:
                             rows = manager.using(using).filter(pk=pk_val)._update(values)
                             if force_update and not rows:
@@ -630,6 +722,7 @@ class Model(six.with_metaclass(ModelBase)):
                                 raise DatabaseError("Save with update_fields did not affect any rows.")
                 else:
                     record_exists = False
+
             if not pk_set or not record_exists:
                 if meta.order_with_respect_to:
                     # If this is a model with an order_with_respect_to
@@ -639,11 +732,14 @@ class Model(six.with_metaclass(ModelBase)):
                     self._order = order_value
 
                 fields = meta.local_fields
+
+                主键不存在又提供 force_update, 矛盾
                 if not pk_set:
                     if force_update or update_fields:
                         raise ValueError("Cannot force an update in save() with no primary key.")
                     fields = [f for f in fields if not isinstance(f, AutoField)]
 
+                只好执行插入操作
                 record_exists = False
 
                 update_pk = bool(meta.has_auto_field and not pk_set)
@@ -651,9 +747,10 @@ class Model(six.with_metaclass(ModelBase)):
 
                 if update_pk:
                     setattr(self, meta.pk.attname, result)
+
             transaction.commit_unless_managed(using=using)
 
-        # Store the database on which the object was saved
+
         self._state.db = using
         # Once saved, this is no longer a to-be-added instance.
         self._state.adding = False
@@ -669,6 +766,7 @@ class Model(six.with_metaclass(ModelBase)):
         using = using or router.db_for_write(self.__class__, instance=self)
         assert self._get_pk_val() is not None, "%s object can't be deleted because its %s attribute is set to None." % (self._meta.object_name, self._meta.pk.attname)
 
+        借助了 Collector 类
         collector = Collector(using=using)
         collector.collect([self])
         collector.delete()
@@ -682,23 +780,29 @@ class Model(six.with_metaclass(ModelBase)):
     def _get_next_or_previous_by_FIELD(self, field, is_next, **kwargs):
         if not self.pk:
             raise ValueError("get_next/get_previous cannot be used on unsaved objects.")
+
         op = is_next and 'gt' or 'lt'
-        order = not is_next and '-' or ''
+        order = not is_next and '-' or '' 排序
         param = force_text(getattr(self, field.attname))
+
         q = Q(**{'%s__%s' % (field.name, op): param})
         q = q | Q(**{field.name: param, 'pk__%s' % op: self.pk})
         qs = self.__class__._default_manager.using(self._state.db).filter(**kwargs).filter(q).order_by('%s%s' % (order, field.name), '%spk' % order)
+
         try:
             return qs[0]
+
         except IndexError:
             raise self.DoesNotExist("%s matching query does not exist." % self.__class__._meta.object_name)
 
     def _get_next_or_previous_in_order(self, is_next):
         cachename = "__%s_order_cache" % is_next
+
         if not hasattr(self, cachename):
             op = is_next and 'gt' or 'lt'
             order = not is_next and '-_order' or '_order'
             order_field = self._meta.order_with_respect_to
+
             obj = self._default_manager.filter(**{
                 order_field.name: getattr(self, order_field.attname)
             }).filter(**{
@@ -746,8 +850,10 @@ class Model(six.with_metaclass(ModelBase)):
         Fields that did not validate should also be excluded, but they need
         to be passed in via the exclude argument.
         """
-        if exclude is None:
+        if exclude is None: exclude 可能为空, 但必须把它转为 list
             exclude = []
+
+        # 唯一性检测
         unique_checks = []
 
         unique_togethers = [(self.__class__, self._meta.unique_together)]
@@ -764,6 +870,7 @@ class Model(six.with_metaclass(ModelBase)):
                 else:
                     unique_checks.append((model_class, tuple(check)))
 
+        # 日期检测
         # These are checks for the unique_for_<date/year/month>.
         date_checks = []
 
@@ -800,12 +907,16 @@ class Model(six.with_metaclass(ModelBase)):
             for field_name in unique_check:
                 f = self._meta.get_field(field_name)
                 lookup_value = getattr(self, f.attname)
+
                 if lookup_value is None:
                     # no value, skip the lookup
                     continue
+
                 if f.primary_key and not self._state.adding:
                     # no need to check for unique primary key when editing
                     continue
+
+                加入到表中
                 lookup_kwargs[str(field_name)] = lookup_value
 
             # some fields were skipped, no reason to do the check
@@ -823,6 +934,7 @@ class Model(six.with_metaclass(ModelBase)):
             model_class_pk = self._get_pk_val(model_class._meta)
             if not self._state.adding and model_class_pk is not None:
                 qs = qs.exclude(pk=model_class_pk)
+
             if qs.exists():
                 if len(unique_check) == 1:
                     key = unique_check[0]
@@ -892,6 +1004,7 @@ class Model(six.with_metaclass(ModelBase)):
                 'field_label': six.text_type(field_labels)
             }
 
+    执行所有的检测
     def full_clean(self, exclude=None):
         """
         Calls clean_fields, clean, and validate_unique, on the model,
@@ -917,6 +1030,7 @@ class Model(six.with_metaclass(ModelBase)):
         for name in errors.keys():
             if name != NON_FIELD_ERRORS and name not in exclude:
                 exclude.append(name)
+
         try:
             self.validate_unique(exclude=exclude)
         except ValidationError as e:
@@ -937,10 +1051,11 @@ class Model(six.with_metaclass(ModelBase)):
         for f in self._meta.fields:
             if f.name in exclude:
                 continue
+
             # Skip validation for empty fields with blank=True. The developer
             # is responsible for making sure they have a valid value.
             raw_value = getattr(self, f.attname)
-            if f.blank and raw_value in validators.EMPTY_VALUES:
+            if f.blank and raw_value in validators.EMPTY_VALUES: 空的
                 continue
             try:
                 setattr(self, f.attname, f.clean(raw_value, self))
