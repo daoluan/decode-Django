@@ -1039,7 +1039,7 @@ class ForeignKey(RelatedField, Field):
             related_name=kwargs.pop('related_name', None),
             limit_choices_to=kwargs.pop('limit_choices_to', None),
             parent_link=kwargs.pop('parent_link', False),
-            on_delete=kwargs.pop('on_delete', CASCADE),
+            on_delete=kwargs.pop('on_delete', CASCADE), #tips: 联系 django.db.models.deletion, CASCADE() 级联函数???
         )
         Field.__init__(self, **kwargs)
 

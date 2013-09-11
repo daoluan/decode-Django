@@ -4,7 +4,7 @@ from django.db.models.query import QuerySet, EmptyQuerySet, insert_query, RawQue
 from django.db.models import signals
 from django.db.models.fields import FieldDoesNotExist
 
-
+这个函数确保每一个 model 都有一个管理器
 def ensure_default_manager(sender, **kwargs):
     """
     Ensures that a Model subclass contains a default manager  and sets the
@@ -44,6 +44,7 @@ def ensure_default_manager(sender, **kwargs):
                     return
             raise AssertionError("Should never get here. Please report a bug, including your model and model manager setup.")
 
+注册了 ensure_default_manager() 函数
 signals.class_prepared.connect(ensure_default_manager)
 
 # class Manager 一个摆着好看的类, 它强烈的依赖于 class QuerySet, 真正工作的是后者.

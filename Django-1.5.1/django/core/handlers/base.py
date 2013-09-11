@@ -26,13 +26,14 @@ class BaseHandler(object):
         http.fix_IE_for_vary,
     ]
 
+    初始化函数, 初始化请求中间件, 视图中间件, 模版中间件, 响应中间件和异常中间件.
     def __init__(self):
         self._request_middleware = self._view_middleware =
             self._template_response_middleware =
             self._response_middleware =
             self._exception_middleware = None  视图, 模版相应, 相应, 异常中间件, 请求中间件
 
-
+    根据 mysite.settings.py 中的 `MIDDLEWARE_CLASSES` 添加所有的中间件.
     def load_middleware(self):
         """
         Populate middleware lists from settings.MIDDLEWARE_CLASSES.
@@ -92,6 +93,7 @@ class BaseHandler(object):
         作为结束的标识, 不懂
         self._request_middleware = request_middleware
 
+    处理请求的函数, 并返回 response.
     def get_response(self, request):
         "Returns an HttpResponse object for the given HttpRequest"
         根据请求, 得到响应

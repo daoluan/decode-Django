@@ -248,11 +248,12 @@ class WSGIHandler(base.BaseHandler):
         # Set up middleware if needed. We couldn't do this earlier, because
         # settings weren't available.
         if self._request_middleware is None: # 这里的检测: 因为 self._request_middleware 是最后才设定的, 所以如果为空,
-                                            # 很可能是因为 self.load_middleware()
+                                            # 很可能是因为 self.load_middleware() 没有调用成功.
             with self.initLock:
                 try:
                     # Check that middleware is still uninitialised.
                     if self._request_middleware is None:
+                        因为 load_middleware() 可能没有调用, 调用一次.
                         self.load_middleware()
                 except:
                     # Unload whatever middleware we got
@@ -263,7 +264,7 @@ class WSGIHandler(base.BaseHandler):
         signls.request_started.send(sender=self.__class__) # __class__ 代表自己的类
 
         try:
-            request = self.request_class(environ) # 实例化 request_class = WSGIRequest
+            request = self.request_class(environ) # 实例化 request_class = WSGIRequest, 将在日后文章中展开, 可以将其视为一个代表 http 请求的类
 
         except UnicodeDecodeError:
             logger.warning('Bad Request (UnicodeDecodeError)',
@@ -274,8 +275,10 @@ class WSGIHandler(base.BaseHandler):
             )
             response = http.HttpResponseBadRequest()
         else:
+            # 调用 self.get_response(), 将会返回一个相应对象 response
             response = self.get_response(request)
 
+        # 将 self 挂钩到 response 对象
         response._handler_class = self.__class__
 
         try:
@@ -283,7 +286,8 @@ class WSGIHandler(base.BaseHandler):
         except KeyError:
             status_text = 'UNKNOWN STATUS CODE'
 
-        status = '%s %s' % (response.status_code, status_text) # 状态码
+         # 状态码
+        status = '%s %s' % (response.status_code, status_text)
 
         response_headers = [(str(k), str(v)) for k, v in response.items()]
 
@@ -291,5 +295,8 @@ class WSGIHandler(base.BaseHandler):
         for c in response.cookies.values():
             response_headers.append((str('Set-Cookie'), str(c.output(header=''))))
 
-        start_response(force_str(status), response_headers) #开始相应, 应该有更多秘密
+        # start_response() 操作已经在上节中介绍了
+        start_response(force_str(status), response_headers)
+
+        # 成功返回相应对象
         return response

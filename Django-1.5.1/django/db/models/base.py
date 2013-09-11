@@ -364,6 +364,8 @@ class ModelState(object):
         self.adding = True
 
 """
+!!! 在 django.db.models.manager 中有线索.
+
 ??? 在调试 django 的时候, 发现一个奇怪的现象: 在 eclipse 中看到如下
 
 class Model(six.with_metaclass(ModelBase)):

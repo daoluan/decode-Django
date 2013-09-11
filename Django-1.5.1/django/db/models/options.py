@@ -415,14 +415,17 @@ class Options(object):
             self._related_objects_cache
         except AttributeError:
             self._fill_related_objects_cache()
+
         predicates = []
+
         if local_only:
             predicates.append(lambda k, v: not v)
         if not include_hidden:
             predicates.append(lambda k, v: not k.field.rel.is_hidden())
+
         cache = (self._related_objects_proxy_cache if include_proxy_eq
                  else self._related_objects_cache)
-        return [t for t in cache.items() if all(p(*t) for p in predicates)]
+        return [t for t in cache.items() if all(p(*t) for p in predicates)] #p(*t) p 是一个函数, all 表示要满足所有的条件
 
     def _fill_related_objects_cache(self):
         cache = SortedDict()

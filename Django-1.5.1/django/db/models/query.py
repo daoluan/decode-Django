@@ -533,9 +533,9 @@ class QuerySet(object):
         del_query.query.select_related = False
         del_query.query.clear_ordering(force_empty=True)
 
-        collector = Collector(using=del_query.db)
-        collector.collect(del_query)
-        collector.delete()
+        collector = Collector(using=del_query.db) 实例化
+        collector.collect(del_query) 收集本实例中的 queryset
+        collector.delete() 执行删除
 
         # Clear the result cache, in case this QuerySet gets reused.
         self._result_cache = None
@@ -544,7 +544,7 @@ class QuerySet(object):
     def _raw_delete(self, using):
         """
         Deletes objects found from the given queryset in single direct SQL
-        query. No signals are sent, and there is no protection for cascades.
+        query. No signals are sent, and there is no protection for cascades. 没有级联
         """
         sql.DeleteQuery(self.model).delete_qs(self, using)
     _raw_delete.alters_data = True
