@@ -241,14 +241,18 @@ class WSGIRequest(http.HttpRequest):
 # 继承, 但只实现了 __call__ 方法, 方便使用
 class WSGIHandler(base.BaseHandler):
     initLock = Lock()
+
+    # 关于此, 日后展开, 可以将其视为一个代表 http 请求的类
     request_class = WSGIRequest
 
     # WSGIHandler 也可以作为函数来调用
     def __call__(self, environ, start_response):
         # Set up middleware if needed. We couldn't do this earlier, because
         # settings weren't available.
-        if self._request_middleware is None: # 这里的检测: 因为 self._request_middleware 是最后才设定的, 所以如果为空,
-                                            # 很可能是因为 self.load_middleware() 没有调用成功.
+
+        # 这里的检测: 因为 self._request_middleware 是最后才设定的, 所以如果为空,
+        # 很可能是因为 self.load_middleware() 没有调用成功.
+        if self._request_middleware is None:
             with self.initLock:
                 try:
                     # Check that middleware is still uninitialised.
@@ -264,7 +268,8 @@ class WSGIHandler(base.BaseHandler):
         signls.request_started.send(sender=self.__class__) # __class__ 代表自己的类
 
         try:
-            request = self.request_class(environ) # 实例化 request_class = WSGIRequest, 将在日后文章中展开, 可以将其视为一个代表 http 请求的类
+            # 实例化 request_class = WSGIRequest, 将在日后文章中展开, 可以将其视为一个代表 http 请求的类
+            request = self.request_class(environ)
 
         except UnicodeDecodeError:
             logger.warning('Bad Request (UnicodeDecodeError)',

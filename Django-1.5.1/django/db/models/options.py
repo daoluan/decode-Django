@@ -23,9 +23,10 @@ DEFAULT_NAMES = ('verbose_name', 'verbose_name_plural', 'db_table', 'ordering',
                  'abstract', 'managed', 'proxy', 'swappable', 'auto_created',
                  'index_together')
 
-
+Options 类记录了一个模块几乎所有的的信息, 属性, 外键, 模块名, 父模块等等, 可以轻松管理(设置获取)一个模块内的属性的信息.
 @python_2_unicode_compatible
 class Options(object):
+    # app_label 模块名
     def __init__(self, meta, app_label=None):
         self.local_fields, self.local_many_to_many = [], []
         self.virtual_fields = []
@@ -47,19 +48,25 @@ class Options(object):
         self.abstract = False
         self.managed = True
         self.proxy = False
+
         # For any class that is a proxy (including automatically created
         # classes for deferred object loading), proxy_for_model tells us
         # which class this model is proxying. Note that proxy_for_model
         # can create a chain of proxy models. For non-proxy models, the
         # variable is always None.
         self.proxy_for_model = None
+
         # For any non-abstract class, the concrete class is the model
         # in the end of the proxy_for_model chain. In particular, for
         # concrete models, the concrete_model is always the class itself.
         self.concrete_model = None
+
         self.swappable = None
         self.parents = SortedDict()
+
+        # 如果两个属性同时关联两个外部表, 比如两个外键的时候, 需要创建一个集合.
         self.duplicate_targets = {}
+
         self.auto_created = False
 
         # To handle various inheritance situations, we need to track where
@@ -69,20 +76,30 @@ class Options(object):
 
         # List of all lookups defined in ForeignKey 'limit_choices_to' options
         # from *other* models. Needed for some admin checks. Internal use only.
+        # 仅供内部使用
         self.related_fkey_lookups = []
 
     def contribute_to_class(self, cls, name):
+        # 参数说明
+        # cls: 是一个 model 实例
+        # name: model 的名字
+
         from django.db import connection
         from django.db.backends.util import truncate_name
 
+        # 将自己挂钩到 cls._meta, 即挂钩到一个 model
         cls._meta = self
+
+        # 是否已经安装
         self.installed = re.sub('\.models$', '', cls.__module__) in settings.INSTALLED_APPS
+
         # First, construct the default values for these options.
         self.object_name = cls.__name__
         self.module_name = self.object_name.lower()
         self.verbose_name = get_verbose_name(self.object_name)
 
         # Next, apply any overridden values from 'class Meta'.
+        # 将数据从 slef.meta 中拷贝出来
         if self.meta:
             meta_attrs = self.meta.__dict__.copy()
             for name in self.meta.__dict__:
@@ -91,9 +108,11 @@ class Options(object):
                 # over it, so we loop over the *original* dictionary instead.
                 if name.startswith('_'):
                     del meta_attrs[name]
+
             for attr_name in DEFAULT_NAMES:
                 if attr_name in meta_attrs:
                     setattr(self, attr_name, meta_attrs.pop(attr_name))
+
                 elif hasattr(self.meta, attr_name):
                     setattr(self, attr_name, getattr(self.meta, attr_name))
 
@@ -107,14 +126,18 @@ class Options(object):
 
             # verbose_name_plural is a special case because it uses a 's'
             # by default.
+            # 详细名称的复数 ???
             if self.verbose_name_plural is None:
                 self.verbose_name_plural = string_concat(self.verbose_name, 's')
 
             # Any leftover attributes must be invalid.
+            # 除了以上属性, 其他都是无效的, 异常
             if meta_attrs != {}:
                 raise TypeError("'class Meta' got invalid attribute(s): %s" % ','.join(meta_attrs.keys()))
         else:
             self.verbose_name_plural = string_concat(self.verbose_name, 's')
+
+        # 居然直接删除, 是因为所有的属性都已经拷贝出来了???
         del self.meta
 
         # If the db_table wasn't provided, use the app_label + module_name.
@@ -123,8 +146,10 @@ class Options(object):
             self.db_table = truncate_name(self.db_table, connection.ops.max_name_length())
 
     def _prepare(self, model):
+        # 排序的属性
         if self.order_with_respect_to:
             self.order_with_respect_to = self.get_field(self.order_with_respect_to)
+
             self.ordering = ('_order',)
             model.add_to_class('_order', OrderWrt())
         else:
@@ -132,15 +157,18 @@ class Options(object):
 
         if self.pk is None:
             if self.parents:
-                # Promote the first parent link in lieu of adding yet another
+                # Promote 促进, 提升 the first parent link in lieu of adding yet another
                 # field.
                 field = next(six.itervalues(self.parents))
+
                 # Look for a local field with the same name as the
                 # first parent link. If a local field has already been
                 # created, use it instead of promoting the parent
                 already_created = [fld for fld in self.local_fields if fld.name == field.name]
+
                 if already_created:
                     field = already_created[0]
+
                 field.primary_key = True
                 self.setup_pk(field)
             else:
@@ -148,6 +176,7 @@ class Options(object):
                         auto_created=True)
                 model.add_to_class('id', auto)
 
+        # 如果两个属性同时关联两个外部表, 比如两个外键的时候, 需要创建一个集合.
         # Determine any sets of fields that are pointing to the same targets
         # (e.g. two ForeignKeys to the same remote model). The query
         # construction code needs to know this. At the end of this,
@@ -155,15 +184,19 @@ class Options(object):
         # columns it duplicates.
         collections = {}
         for column, target in six.iteritems(self.duplicate_targets):
+
             try:
                 collections[target].add(column)
             except KeyError:
                 collections[target] = set([column])
+
         self.duplicate_targets = {}
         for elt in six.itervalues(collections):
             if len(elt) == 1:
                 continue
+
             for column in elt:
+                # elt_set - set([column])
                 self.duplicate_targets[column] = elt.difference(set([column]))
 
     def add_field(self, field):
@@ -171,20 +204,32 @@ class Options(object):
         # the "creation_counter" attribute of the field.
         # Move many-to-many related fields from self.fields into
         # self.many_to_many.
+
+        # 重申一遍, field.rel 是 ***Rel 类, 在 django.db.models.fields.related.py 中可见找到
         if field.rel and isinstance(field.rel, ManyToManyRel):
+            # 在 self.local_many_to_many 表中添加记录
             self.local_many_to_many.insert(bisect(self.local_many_to_many, field), field)
+
             if hasattr(self, '_m2m_cache'):
                 del self._m2m_cache
         else:
+            # 其他情况插入 self.local_fields 表中,
             self.local_fields.insert(bisect(self.local_fields, field), field)
             self.setup_pk(field)
+
             if hasattr(self, '_field_cache'):
                 del self._field_cache
                 del self._field_name_cache
+        """
+        从上面可以看出,
+         - self.local_many_to_many list 记录的是外部的属性, 可以是外键
+         - self.local_fields 记录的是本表自己的属性
+        """
 
         if hasattr(self, '_name_map'):
             del self._name_map
 
+    ???
     def add_virtual_field(self, field):
         self.virtual_fields.append(field)
 
@@ -199,6 +244,7 @@ class Options(object):
         """
         return self.fields.index(self.pk)
 
+    代理 ???
     def setup_proxy(self, target):
         """
         Does the internal setup so that the current model is a proxy for
@@ -227,6 +273,7 @@ class Options(object):
         return raw
     verbose_name_raw = property(verbose_name_raw)
 
+    ???
     def _swapped(self):
         """
         Has this model been swapped out for another? If so, return the model
@@ -255,6 +302,8 @@ class Options(object):
 
     def _fields(self):
         """
+        返回这个模块的所有属性
+
         The getter for self.fields. This returns the list of field objects
         available to this model (including through parent models).
 
@@ -262,14 +311,19 @@ class Options(object):
         to this instance (not a copy).
         """
         try:
+            # 在上面没有看到 self._field_name_cache ???
             self._field_name_cache
         except AttributeError:
+            # 如果出错, 在这里修复
             self._fill_fields_cache()
         return self._field_name_cache
+    # 方便访问, 修饰器
     fields = property(_fields)
 
     def get_fields_with_model(self):
         """
+        返回属性-模块对, 容易区分那个属性属于哪个类
+
         Returns a sequence of (field, model) pairs for all fields. The "model"
         element is None for fields on the current model. Mostly of use when
         constructing queries so that we know which model a field belongs to.
@@ -277,25 +331,34 @@ class Options(object):
         try:
             self._field_cache
         except AttributeError:
+            # 如果出错, 在这里修复
             self._fill_fields_cache()
         return self._field_cache
 
     def _fill_fields_cache(self):
         cache = []
+
+        # 先收集父模块的所有属性
         for parent in self.parents:
+            # parent._meta.get_fields_with_model() 就是调用这个 Options 类的 get_fields_with_model() 方法
             for field, model in parent._meta.get_fields_with_model():
                 if model:
                     cache.append((field, model))
                 else:
                     cache.append((field, parent))
+
+        # 再收集自己的属性
         cache.extend([(f, None) for f in self.local_fields])
         self._field_cache = tuple(cache)
+
+        # self._field_name_cache 只记录表属性名
         self._field_name_cache = [x for x, _ in cache]
 
     def _many_to_many(self):
         try:
             self._m2m_cache
         except AttributeError:
+            # 如果出错, 在这里修复
             self._fill_m2m_cache()
         return list(self._m2m_cache)
     many_to_many = property(_many_to_many)
@@ -307,17 +370,22 @@ class Options(object):
         try:
             self._m2m_cache
         except AttributeError:
+            # 如果出错, 在这里修复
             self._fill_m2m_cache()
         return list(six.iteritems(self._m2m_cache))
 
     def _fill_m2m_cache(self):
         cache = SortedDict()
+
+        # 先收集父模块的所有 many_to_many 属性
         for parent in self.parents:
             for field, model in parent._meta.get_m2m_with_model():
                 if model:
                     cache[field] = model
                 else:
                     cache[field] = parent
+
+        # 再收集自己的 many_to_many 属性
         for field in self.local_many_to_many:
             cache[field] = None
         self._m2m_cache = cache
@@ -326,7 +394,9 @@ class Options(object):
         """
         Returns the requested field by name. Raises FieldDoesNotExist on error.
         """
+        # 三目运算符的语句
         to_search = many_to_many and (self.fields + self.many_to_many) or self.fields
+
         for f in to_search:
             if f.name == name:
                 return f
@@ -379,14 +449,20 @@ class Options(object):
         # m2m accessor names can be overridden, if necessary.
         for f, model in self.get_all_related_m2m_objects_with_model():
             cache[f.field.related_query_name()] = (f, model, False, True)
+
         for f, model in self.get_all_related_objects_with_model():
             cache[f.field.related_query_name()] = (f, model, False, False)
+
         for f, model in self.get_m2m_with_model():
             cache[f.name] = (f, model, True, True)
+
         for f, model in self.get_fields_with_model():
             cache[f.name] = (f, model, True, False)
+
+        ???
         if app_cache_ready():
             self._name_map = cache
+
         return cache
 
     def get_add_permission(self):
@@ -397,6 +473,11 @@ class Options(object):
 
     def get_delete_permission(self):
         return 'delete_%s' % self.object_name.lower()
+
+###########################
+下面的六个方法给我的感觉是核心, 但现在还不知道作用在哪里 ???
+猜测: 返回关联集合的对象, Model 类型 ???
+###########################
 
     def get_all_related_objects(self, local_only=False, include_hidden=False,
                                 include_proxy_eq=False):
@@ -414,6 +495,7 @@ class Options(object):
         try:
             self._related_objects_cache
         except AttributeError:
+            # 如果出错, 在这里修复
             self._fill_related_objects_cache()
 
         predicates = []
@@ -430,14 +512,18 @@ class Options(object):
     def _fill_related_objects_cache(self):
         cache = SortedDict()
         parent_list = self.get_parent_list()
+
         for parent in self.parents:
             for obj, model in parent._meta.get_all_related_objects_with_model(include_hidden=True):
+
                 if (obj.field.creation_counter < 0 or obj.field.rel.parent_link) and obj.model not in parent_list:
                     continue
+
                 if not model:
                     cache[obj] = parent
                 else:
                     cache[obj] = model
+
         # Collect also objects which are in relation to some proxy child/parent of self.
         proxy_cache = cache.copy()
         for klass in get_models(include_auto_created=True, only_installed=False):
@@ -520,9 +606,10 @@ class Options(object):
         result = set()
         for parent in self.parents:
             result.add(parent)
+            # 添加父亲的父亲
             result.update(parent._meta.get_parent_list())
         return result
-
+    ???
     def get_ancestor_link(self, ancestor):
         """
         Returns the field on the current model which points to the given
@@ -532,10 +619,13 @@ class Options(object):
 
         Returns None if the model isn't an ancestor of this one.
         """
+        # 如果直接能再 parents 中找到
         if ancestor in self.parents:
             return self.parents[ancestor]
+
         for parent in self.parents:
             # Tries to get a link field from the immediate parent
+            # 跨代连接问题
             parent_link = parent._meta.get_ancestor_link(ancestor)
             if parent_link:
                 # In case of a proxied model, the first link

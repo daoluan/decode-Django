@@ -80,7 +80,7 @@ class ModelBase(type):
         module = attrs.pop('__module__')
         new_class = super_new(cls, name, bases, {'__module__': module}) 新建类
 
-        从参数 attrs 中获取 Meta 属性
+        # 从参数 attrs 中获取 Meta 属性
         attr_meta = attrs.pop('Meta', None)
 
         abstract = getattr(attr_meta, 'abstract', False)
@@ -104,6 +104,13 @@ class ModelBase(type):
             meta = attr_meta
 
         base_meta = getattr(new_class, '_meta', None)
+
+        """
+        有关 app_label 参见:
+        Options.app_label
+        If a model exists outside of the standard locations (models.py or a models package in an app), the model must define which app it is part of:
+                `app_label = 'myapp'
+        """
 
         if getattr(meta, 'app_label', None) is None:
             计算得出应用名

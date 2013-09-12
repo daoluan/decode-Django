@@ -533,9 +533,9 @@ class QuerySet(object):
         del_query.query.select_related = False
         del_query.query.clear_ordering(force_empty=True)
 
-        collector = Collector(using=del_query.db) 实例化
-        collector.collect(del_query) 收集本实例中的 queryset
-        collector.delete() 执行删除
+        collector = Collector(using=del_query.db) # 实例化
+        collector.collect(del_query) # 收集本实例中的 queryset
+        collector.delete() # 执行删除
 
         # Clear the result cache, in case this QuerySet gets reused.
         self._result_cache = None

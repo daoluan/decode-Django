@@ -68,7 +68,7 @@ class Field(object):
     # The auto_creation_counter is used for fields that Django implicitly
     # creates, creation_counter is used for all user-specified fields.
     creation_counter = 0       # 用户创建的字段
-    auto_creation_counter = -1 # django 隐士创建的字段
+    auto_creation_counter = -1 # django 隐式创建的字段
 
     default_validators = [] # Default set of validators 默认有效性检测器
 
@@ -100,7 +100,10 @@ class Field(object):
         # 关于诸多设置, 请参见: https://docs.djangoproject.com/en/dev/howto/custom-model-fields/
         self.name = name
         self.verbose_name = verbose_name
+
+        # 应该只是一个 bool 值
         self.primary_key = primary_key
+
         self.max_length, self._unique = max_length, unique
         self.blank, self.null = blank, null
         self.rel = rel

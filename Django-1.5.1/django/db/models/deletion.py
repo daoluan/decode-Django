@@ -16,6 +16,8 @@ class ProtectedError(IntegrityError):
 def CASCADE(collector, field, sub_objs, using):
     collector.collect(sub_objs, source=field.rel.to,
                       source_attr=field.name, nullable=field.null)
+
+    # 如果 field.null 为真, 外键将被设置为 null
     if field.null and not connections[using].features.can_defer_constraint_checks:
         collector.add_field_update(field, None, sub_objs)
 

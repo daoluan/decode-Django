@@ -89,6 +89,7 @@ def do_pending_lookups(sender, **kwargs):
     for cls, field, operation in pending_lookups.pop(key, []):
         operation(field, sender, cls)
 
+注册函数
 signals.class_prepared.connect(do_pending_lookups)
 
 
@@ -930,10 +931,20 @@ class ReverseManyRelatedObjectsDescriptor(object):
         manager.clear()
         manager.add(*value)
 
-
+多对一关系类, 记录了外键关联表的信息, 包括 model, field_name 等.
 class ManyToOneRel(object):
     def __init__(self, to, field_name, related_name=None, limit_choices_to=None,
         parent_link=False, on_delete=None):
+
+        # 参数说明
+        # to: model
+        # field_name: 属性名, 一般是属性名
+        # related_name: 关联表名, 如果未设置, 会自动生成
+        """有关 parent_link 参见:
+        OneToOneField.parent_link
+        When True and used in a model which inherits from another (concrete) model, indicates that this field should be used as the link back to the parent class, rather than the extra OneToOneField which would normally be implicitly created by subclassing."""
+        # on_delete: 即外键所在表删除的时候, 外键该如何设置, 是删除包含外键的表项, 还是设置为 NULL
+
         try:
             to._meta
         except AttributeError:  # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
@@ -968,7 +979,7 @@ class ManyToOneRel(object):
                     self.field_name)
         return data[0]
 
-
+一对一关系类, 几乎和多对一关系类一样, 只是 OneToOneRel.multiple 属性为 false.
 class OneToOneRel(ManyToOneRel):
     def __init__(self, to, field_name, related_name=None, limit_choices_to=None,
         parent_link=False, on_delete=None):
@@ -1001,6 +1012,7 @@ class ManyToManyRel(object):
         (this is always the primary key on the target model). Provided for
         symmetry with ManyToOneRel.
         """
+        # 直接返回主键
         return self.to._meta.pk
 
 注意到 foreignkey 类也是一个 field, 这就不难理解了. 因为外键也可以是表中一个属性.
@@ -1025,7 +1037,7 @@ class ForeignKey(RelatedField, Field):
             # the to_field during FK construction. It won't be guaranteed to
             # be correct until contribute_to_class is called. Refs #12190.
 
-            to_field 如果没有设置, 那就找关联表中的属性
+            # to_field 缺省值为关联表中的主键
             to_field = to_field or (to._meta.pk and to._meta.pk.name)
 
         你可以在 Foreign() 构造过程中设定 verbose_name 详细名称
@@ -1238,13 +1250,12 @@ def create_many_to_many_intermediary_model(field, klass):
         to: models.ForeignKey(to_model, related_name='%s+' % name, db_tablespace=field.db_tablespace)
     })
 
-
 class ManyToManyField(RelatedField, Field):
     description = _("Many-to-many relationship")
 
     def __init__(self, to, **kwargs):
         try:
-            不懂, 为什么要做此检测
+            # 不能在抽象模块中定义多对多的关系
             assert not to._meta.abstract, "%s cannot define a relation with abstract class %s" % (self.__class__.__name__, to._meta.object_name)
         except AttributeError:  # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
             assert isinstance(to, six.string_types), "%s(%r) is invalid. First parameter to ManyToManyField must be either a model, a model name, or the string %r" % (self.__class__.__name__, to, RECURSIVE_RELATIONSHIP_CONSTANT)
@@ -1253,7 +1264,10 @@ class ManyToManyField(RelatedField, Field):
             # forcibly coerce it here (breaks early if there's a problem).
             to = str(to)
 
+        # 详细名
         kwargs['verbose_name'] = kwargs.get('verbose_name', None)
+
+        # 创建一个多对多关系类实例
         kwargs['rel'] = ManyToManyRel(to,
             related_name=kwargs.pop('related_name', None),
             limit_choices_to=kwargs.pop('limit_choices_to', None),
@@ -1361,6 +1375,11 @@ class ManyToManyField(RelatedField, Field):
         #  1) There is a manually specified intermediate, or
         #  2) The class owning the m2m field is abstract.
         #  3) The class owning the m2m field has been swapped out.
+
+        # 如果未指定 rel.through 选项,
+        # cls 不为抽象模块,
+        # 且 XXX (不懂 cls._meta.swapped 即 Options.swapped 属性有什么用 ???)
+        # 即自动创建一个多对多管理表
         if not self.rel.through and not cls._meta.abstract and not cls._meta.swapped:
             self.rel.through = create_many_to_many_intermediary_model(self, cls)
 
