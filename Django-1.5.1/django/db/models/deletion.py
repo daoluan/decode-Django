@@ -156,6 +156,10 @@ class Collector(object):
 
     判断是否可以快速删除, 不懂内部机制
     def can_fast_delete(self, objs, from_field=None):
+        # 参数说明
+        # objs: QuerySet 对象
+        # from_field: 外键
+
         """
         Determines if the objects in the given queryset-like can be
         fast-deleted.
@@ -170,12 +174,15 @@ class Collector(object):
         skipping parent -> child -> parent chain preventing fast delete of
         the child.
         """
+        # from_field 所指一般为外键, 外键的 on_delete() 不为 CASCADE() 即可能是 DO_NOTHING() 或者其他用户自定义的函数, 此时不能快速删除
         if from_field and from_field.rel.on_delete is not CASCADE:
             return False
 
+        # 如果 QuerySet 对象没有指定模块和 _raw_delete() 方法, 则无法快速删除
         if not (hasattr(objs, 'model') and hasattr(objs, '_raw_delete')):
             return False
 
+        # QuerySet 对象的模块没有被监听, 则无法快速删除
         model = objs.model
         if (signals.pre_delete.has_listeners(model)
                 or signals.post_delete.has_listeners(model)
@@ -185,6 +192,9 @@ class Collector(object):
         # The use of from_field comes from the need to avoid cascade back to
         # parent when parent delete is cascading to child.
         opts = model._meta
+
+        # 如果存在父模块且 from_field 就是和父模块关联的属性, 则无法快速删除.
+        # 下面的 link 是 OneToOneField 或者 ManyToManyField, 详见 django.db.models.base.py
         if any(link != from_field for link in opts.concrete_model._meta.parents.values()):
             return False
 

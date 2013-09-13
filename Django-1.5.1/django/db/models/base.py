@@ -244,12 +244,17 @@ class ModelBase(type):
                     field = o2o_map[base]
 
                 elif not is_proxy:
+                    # 创建一个指向父模块的属性
                     attr_name = '%s_ptr' % base._meta.module_name
                     field = OneToOneField(base, name=attr_name,
                             auto_created=True, parent_link=True)
+
+                    # 放在子模块 new_class 中
                     new_class.add_to_class(attr_name, field)
                 else:
                     field = None
+
+                # 在子模块 new_class.parents 中添加此属性.
                 new_class._meta.parents[base] = field
             else:
                 # .. and abstract ones.
