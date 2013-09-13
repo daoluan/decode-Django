@@ -4,14 +4,14 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils.importlib import import_module
 from django.utils import six
 
-
+# import * 引入的时候只导入一下六个方法或类
 __all__ = ['handler403', 'handler404', 'handler500', 'include', 'patterns', 'url']
 
 handler403 = 'django.views.defaults.permission_denied'
 handler404 = 'django.views.defaults.page_not_found'
 handler500 = 'django.views.defaults.server_error'
 
-url 里面可以用 incude 函数
+# url 里面可以用 incude 函数
 def include(arg, namespace=None, app_name=None):
     if isinstance(arg, tuple):
         # callable returning a namespace hint
@@ -24,11 +24,11 @@ def include(arg, namespace=None, app_name=None):
         urlconf_module = arg
 
     if isinstance(urlconf_module, six.string_types):
-        导入模块
+        # 导入模块
         urlconf_module = import_module(urlconf_module)
 
-    在 urlconf_module 中导入 urlpatterns
-    在 urlconf_module 中肯定会有 urlpatterns 这个变量
+    # 在 urlconf_module 中导入 urlpatterns
+    # 在 urlconf_module 中肯定会有 urlpatterns 这个变量
     patterns = getattr(urlconf_module, 'urlpatterns', urlconf_module)
 
     # Make sure we can iterate through the patterns (without this, some
@@ -41,7 +41,7 @@ def include(arg, namespace=None, app_name=None):
                 raise ImproperlyConfigured(
                     'Using i18n_patterns in an included URLconf is not allowed.')
 
-                返回模块, app 名子 ,命名空间
+    # 返回模块, app 名 ,命名空间
     return (urlconf_module, app_name, namespace)
 
 def patterns(prefix, *args): 特意留一个 prefix
@@ -57,18 +57,21 @@ def patterns(prefix, *args): 特意留一个 prefix
     返回 RegexURLPattern 对象的集合
     return pattern_list
 
-url 函数
+# url 函数
 def url(regex, view, kwargs=None, name=None, prefix=''):
     if isinstance(view, (list,tuple)): 如果是 list 或者 tuple
-        # For include(...) processing.
+        # For include(...) processing. 处理包含 include(...)
         urlconf_module, app_name, namespace = view
-        return RegexURLResolver(regex, urlconf_module, kwargs, app_name=app_name, namespace=namespace)
 
+        # 此处返回 RegexURLResolver, 区分下面返回 RegexURLPattern
+        return RegexURLResolver(regex, urlconf_module, kwargs, app_name=app_name, namespace=namespace)
     else:
         if isinstance(view, six.string_types):
             if not view:
                 raise ImproperlyConfigured('Empty URL pattern view name not permitted (for pattern %r)' % regex)
             if prefix:
                 view = prefix + '.' + view
-        return RegexURLPattern(regex, view, kwargs, name) 返回 RegexURLPattern 的对象
+
+        # 返回 RegexURLPattern 的对象
+        return RegexURLPattern(regex, view, kwargs, name)
 

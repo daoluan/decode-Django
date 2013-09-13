@@ -69,7 +69,8 @@ class ResolverMatch(object):
         return ':'.join([ x for x in [ self.namespace, self.url_name ]  if x ])
 
     def __getitem__(self, index):
-        return (self.func, self.args, self.kwargs)[index] # (self.func, self.args, self.kwargs) 012
+        # (self.func, self.args, self.kwargs) 012
+        return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
         return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name='%s', app_name='%s', namespace='%s')" % (
@@ -164,7 +165,6 @@ def get_mod_func(callback):
     except ValueError:
         return callback, ''
     return callback[:dot], callback[dot+1:]
-
 
 class LocaleRegexProvider(object):
     """
@@ -368,15 +368,24 @@ class RegexURLResolver(LocaleRegexProvider):
     def resolve(self, path):
 
         tried = []
-        match = self.regex.search(path) # 默认是要去除 slash
+
+        # regex 在 RegexURLResolver 中表示前缀
+        match = self.regex.search(path)
 
         if match:
-            new_path = path[match.end():] # 默认获取 slash 后面的字串
+            # 去除前缀
+            new_path = path[match.end():]
 
             for pattern in self.url_patterns: # 穷举所有的 url pattern
                 # pattern 是 RegexURLPattern 实例
                 try:
-                    sub_match = pattern.resolve(new_path) # 返回 ResolverMatch 实例
+
+"""在 RegexURLResolver.resolve() 中的一句: sub_match = pattern.resolve(new_path) 最为关键.
+从上面 patterns() 函数的作用知道, pattern 可以是 RegexURLPattern 对象或者 RegexURLResolver 对象. 当为 RegexURLResolver 对象的时候, 就是启动子 url 匹配处理器, 于是又回到了上面."""
+
+                    # 返回 ResolverMatch 实例
+                    sub_match = pattern.resolve(new_path)
+
                 except Resolver404 as e:
                     sub_tried = e.args[0].get('tried')
 
@@ -390,8 +399,13 @@ class RegexURLResolver(LocaleRegexProvider):
                         # match.groupdict()
                         # Return a dictionary containing all the named subgroups of the match,
                         # keyed by the subgroup name.
+
+                        # 如果在 urls.py 的正则表达式中使用了变量, match.groupdict() 返回即为变量和值.
                         sub_match_dict = dict(match.groupdict(), **self.default_kwargs)
+
                         sub_match_dict.update(sub_match.kwargs)
+
+                        # 返回 ResolverMatch 对象, 如你所知, 得到此对象将可以执行真正的逻辑操作, 即 views.py 内定义的函数.
                         return ResolverMatch(sub_match.func,
                             sub_match.args, sub_match_dict,
                             sub_match.url_name, self.app_name or sub_match.app_name,
@@ -421,6 +435,8 @@ class RegexURLResolver(LocaleRegexProvider):
             iter(patterns) # 是否可以迭代
         except TypeError:
             raise ImproperlyConfigured("The included urlconf %s doesn't have any patterns in it" % self.urlconf_name)
+
+        # patterns 实际上是 RegexURLPattern 对象和 RegexURLResolver 对象的集合
         return patterns
 
     def _resolve_special(self, view_type):
@@ -506,9 +522,15 @@ class LocaleRegexURLResolver(RegexURLResolver):
             self._regex_dict[language_code] = regex_compiled
         return self._regex_dict[language_code]
 
+# path: url
+# urlconf: urlpatterns 所在的文件
 def resolve(path, urlconf=None):
+    # 如果没有指定 urlconf, 调用 get_urlconf() 获取
     if urlconf is None:
         urlconf = get_urlconf()
+
+    # get_resolver() 会返回 RegexURLResolver 实例, 即 url 匹配处理器
+    # 并调用 RegexURLResolver.resolve(path) 启动解析过程
     return get_resolver(urlconf).resolve(path)
 
 def reverse(viewname, urlconf=None, args=None, kwargs=None, prefix=None, current_app=None):
@@ -609,6 +631,7 @@ def set_urlconf(urlconf_name):
 
 def get_urlconf(default=None):
     """
+    全局变量 _urlconfs 是一个 python 文件, 读取
     Returns the root URLconf to use for the current thread if it has been
     changed from the default one.
     """
