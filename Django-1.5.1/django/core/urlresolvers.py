@@ -268,6 +268,7 @@ class RegexURLResolver(LocaleRegexProvider):
         LocaleRegexProvider.__init__(self, regex)
 
         # urlconf_name is a string representing the module containing URLconfs.
+        # url 配置文件所在的文件
         self.urlconf_name = urlconf_name
 
         if not isinstance(urlconf_name, six.string_types):
@@ -381,12 +382,15 @@ class RegexURLResolver(LocaleRegexProvider):
                 try:
 
 """在 RegexURLResolver.resolve() 中的一句: sub_match = pattern.resolve(new_path) 最为关键.
-从上面 patterns() 函数的作用知道, pattern 可以是 RegexURLPattern 对象或者 RegexURLResolver 对象. 当为 RegexURLResolver 对象的时候, 就是启动子 url 匹配处理器, 于是又回到了上面."""
+从上面 patterns() 函数的作用知道, pattern 可以是 RegexURLPattern 对象或者 RegexURLResolver 对象. 当为 RegexURLResolver 对象的时候, 就是启动子 url 匹配处理器, 于是又回到了上面.
+
+RegexURLPattern 和 RegexURLResolver 都有一个 resolve() 函数, 所以, 下面的一句 resolve() 调用, 可以是调用 RegexURLPattern.resolve() 或者 RegexURLResolver.resolve()"""
 
                     # 返回 ResolverMatch 实例
                     sub_match = pattern.resolve(new_path)
 
                 except Resolver404 as e:
+                    # 搜集已经尝试过的匹配器, 在出错的页面中会显示错误信息
                     sub_tried = e.args[0].get('tried')
 
                     if sub_tried is not None:

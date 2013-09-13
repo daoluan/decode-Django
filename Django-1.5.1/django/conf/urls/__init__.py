@@ -18,13 +18,14 @@ def include(arg, namespace=None, app_name=None):
         if namespace:
             raise ImproperlyConfigured('Cannot override the namespace for a dynamic module that provides a namespace')
 
+        # 获取 urlconf 模块文件, 应用名, 命名空间
         urlconf_module, app_name, namespace = arg
     else:
         # No namespace hint - use manually provided namespace
         urlconf_module = arg
 
     if isinstance(urlconf_module, six.string_types):
-        # 导入模块
+        # 尝试导入模块
         urlconf_module = import_module(urlconf_module)
 
     # 在 urlconf_module 中导入 urlpatterns
