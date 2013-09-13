@@ -10,7 +10,7 @@ __all__ = ['handler403', 'handler404', 'handler500', 'include', 'patterns', 'url
 handler403 = 'django.views.defaults.permission_denied'
 handler404 = 'django.views.defaults.page_not_found'
 handler500 = 'django.views.defaults.server_error'
-    
+
 url 里面可以用 incude 函数
 def include(arg, namespace=None, app_name=None):
     if isinstance(arg, tuple):
@@ -25,9 +25,10 @@ def include(arg, namespace=None, app_name=None):
 
     if isinstance(urlconf_module, six.string_types):
         导入模块
-        urlconf_module = import_module(urlconf_module) 
+        urlconf_module = import_module(urlconf_module)
 
-    在 urlconf_module 中导入 urlpatterns:在 urlconf_module 中肯定会有 urlpatterns 这个变量
+    在 urlconf_module 中导入 urlpatterns
+    在 urlconf_module 中肯定会有 urlpatterns 这个变量
     patterns = getattr(urlconf_module, 'urlpatterns', urlconf_module)
 
     # Make sure we can iterate through the patterns (without this, some
@@ -54,7 +55,7 @@ def patterns(prefix, *args): 特意留一个 prefix
 
         pattern_list.append(t)
     返回 RegexURLPattern 对象的集合
-    return pattern_list     
+    return pattern_list
 
 url 函数
 def url(regex, view, kwargs=None, name=None, prefix=''):
@@ -62,7 +63,7 @@ def url(regex, view, kwargs=None, name=None, prefix=''):
         # For include(...) processing.
         urlconf_module, app_name, namespace = view
         return RegexURLResolver(regex, urlconf_module, kwargs, app_name=app_name, namespace=namespace)
-        
+
     else:
         if isinstance(view, six.string_types):
             if not view:

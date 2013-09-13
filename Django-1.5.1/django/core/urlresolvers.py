@@ -23,9 +23,10 @@ from django.utils.regex_helper import normalize
 from django.utils import six
 from django.utils.translation import get_language
 
-
 _resolver_cache = {} # Maps URLconf modules to RegexURLResolver instances. URLconf RegexURLResolver映射
+
 _ns_resolver_cache = {} # Maps namespaces to RegexURLResolver instances.   namespaces RegexURLResolver 映射
+
 _callable_cache = {} # Maps view and url pattern names to their view functions. view url pattern view functions 映射
 
 # SCRIPT_NAME prefixes for each thread are stored here. If there's no entry for
@@ -36,7 +37,7 @@ _prefixes = local() # 该线程全局变量
 # Overridden URLconfs for each thread are stored here.
 _urlconfs = local() # 该线程全局变量
 
-# 处理器匹配类, 成功则会实例化
+# 处理器匹配结果类, 当匹配成功的时候会实例化
 class ResolverMatch(object):
     def __init__(self, func, args, kwargs, url_name=None, app_name=None, namespaces=None):
         self.func = func
@@ -94,13 +95,16 @@ def get_callable(lookup_view, can_fail=False):
     during the import fail and the string is returned.
     """
     if not callable(lookup_view):
+        # def get_mod_func(callback):
+        # # Converts 'django.views.news.stories.story_detail' to
+        # # ['django.views.news.stories', 'story_detail']
         mod_name, func_name = get_mod_func(lookup_view)
 
         if func_name == '':
             return lookup_view
 
         try:
-            mod = import_module(mod_name) 尝试导入
+            mod = import_module(mod_name) 尝试导入模块
         except ImportError:
             parentmod, submod = get_mod_func(mod_name)
 
@@ -117,7 +121,7 @@ def get_callable(lookup_view, can_fail=False):
             try:
                 lookup_view = getattr(mod, func_name)
 
-                # 异常
+                # 不能调用, 异常
                 if not callable(lookup_view):
                     raise ViewDoesNotExist(
                         "Could not import %s.%s. View is not callable." %
@@ -132,6 +136,7 @@ def get_callable(lookup_view, can_fail=False):
 
 get_callable = memoize(get_callable, _callable_cache, 1)
 
+# 获取 URL 匹配处理器
 def get_resolver(urlconf):
     # 如果为空, 导入 settings 中的 ROOT_URLCONF
     if urlconf is None:
@@ -152,7 +157,6 @@ def get_ns_resolver(ns_pattern, resolver):
 get_ns_resolver = memoize(get_ns_resolver, _ns_resolver_cache, 2)
 
 def get_mod_func(callback):
-    不懂
     # Converts 'django.views.news.stories.story_detail' to
     # ['django.views.news.stories', 'story_detail']
     try:
@@ -161,10 +165,13 @@ def get_mod_func(callback):
         return callback, ''
     return callback[:dot], callback[dot+1:]
 
+
 class LocaleRegexProvider(object):
     """
+    区域相关的正则表达式, 会根据地区的不同返回不同的正则表达式, django 内部维护. 在一般英文的 url 中用处不大.
+
     A mixin to provide a default regex property which can vary by active
-    language. 区域相关
+    language.
     """
     def __init__(self, regex):
         # regex is either a string representing a regular expression, or a
@@ -197,7 +204,7 @@ class LocaleRegexProvider(object):
 
         return self._regex_dict[language_code]
 
-# URL 正则匹配
+# URL 正则匹配类, 用于执行正则匹配
 class RegexURLPattern(LocaleRegexProvider):
     def __init__(self, regex, callback, default_args=None, name=None):
         LocaleRegexProvider.__init__(self, regex)
@@ -225,12 +232,14 @@ class RegexURLPattern(LocaleRegexProvider):
 
         self._callback_str = prefix + '.' + self._callback_str
 
+    # 执行正则匹配
     def resolve(self, path):
         match = self.regex.search(path) # 搜索
         if match:
             # If there are any named groups, use those as kwargs, ignoring
             # non-named groups. Otherwise, pass all non-named arguments as
             # positional arguments.
+            # match.groupdict() 返回正则表达式中匹配的变量以及其值, 需要了解 python 中正则表达式的使用
             kwargs = match.groupdict()
             if kwargs:
                 args = ()
@@ -240,9 +249,10 @@ class RegexURLPattern(LocaleRegexProvider):
             # In both cases, pass any extra_kwargs as **kwargs.
             kwargs.update(self.default_args)
 
-            # 成功
-            return ResolverMatch(self.callback, args, kwargs, self.name) 返回匹配处理器类
+            # 成功, 返回匹配结果类; 否则返回 None
+            return ResolverMatch(self.callback, args, kwargs, self.name)
 
+    # 对 callback 进行修饰, 如果 self._callback 不是一个可调用的对象, 则可能还是一个字符串, 需要解析得到可调用的对象
     @property
     def callback(self):
         if self._callback is not None:
@@ -251,7 +261,8 @@ class RegexURLPattern(LocaleRegexProvider):
         self._callback = get_callable(self._callback_str)
         return self._callback
 
-# URL 正则处理器
+# URL 正则处理器类, 需要和 RegexURLPattert URL正则匹配类 区分开来:
+# 实际上, RegexURLResolver 中有包含 RegexURLPattern 实例和 RegexURLResolver 实例的集合.
 class RegexURLResolver(LocaleRegexProvider):
     def __init__(self, regex, urlconf_name, default_kwargs=None, app_name=None, namespace=None):
         LocaleRegexProvider.__init__(self, regex)
@@ -387,9 +398,13 @@ class RegexURLResolver(LocaleRegexProvider):
                             [self.namespace] + sub_match.namespaces)
 
                     tried.append([pattern])
+
+            # 如果没有匹配成功的项目, 将异常
             raise Resolver404({'tried': tried, 'path': new_path})
+
         raise Resolver404({'path' : path})
 
+    # 修饰 urlconf_module, 返回 self._urlconf_module, 即 urlpatterns 变量所在的文件
     @property
     def urlconf_module(self):
         try:
@@ -398,10 +413,9 @@ class RegexURLResolver(LocaleRegexProvider):
             self._urlconf_module = import_module(self.urlconf_name)
             return self._urlconf_module
 
-    # 返回指定模块中的 urlpatterns
+    # 返回指定文件中的 urlpatterns 变量
     @property
     def url_patterns(self):
-
         patterns = getattr(self.urlconf_module, "urlpatterns", self.urlconf_module)
         try:
             iter(patterns) # 是否可以迭代
