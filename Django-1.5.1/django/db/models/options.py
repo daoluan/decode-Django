@@ -28,7 +28,9 @@ Options 类记录了一个模块几乎所有的的信息, 属性, 外键, 模块
 class Options(object):
     # app_label 模块名
     def __init__(self, meta, app_label=None):
+        # 将多对多属性和其他属性分开存储, 是什么原因???
         self.local_fields, self.local_many_to_many = [], []
+
         self.virtual_fields = []
         self.module_name, self.verbose_name = None, None
         self.verbose_name_plural = None
@@ -528,13 +530,17 @@ class Options(object):
         proxy_cache = cache.copy()
         for klass in get_models(include_auto_created=True, only_installed=False):
             if not klass._meta.swapped:
+                # 遍历所有的表内属性
                 for f in klass._meta.local_fields:
                     if f.rel and not isinstance(f.rel.to, six.string_types):
+                        # 如果属性所关联的表是自己
                         if self == f.rel.to._meta:
                             cache[RelatedObject(f.rel.to, klass, f)] = None
                             proxy_cache[RelatedObject(f.rel.to, klass, f)] = None
+                        # 关于 self.concrete_model 参见 self.__init__() 中的说明
                         elif self.concrete_model == f.rel.to._meta.concrete_model:
                             proxy_cache[RelatedObject(f.rel.to, klass, f)] = None
+        # 从上面来看, cache 记录的是一个键为 RelatedObject, 值为 None 的映射. 而 RelatedObject 中记录了属性关联表的信息.
         self._related_objects_cache = cache
         self._related_objects_proxy_cache = proxy_cache
 

@@ -256,18 +256,24 @@ class Collector(object):
 
         是否级联
         if collect_related:
+            # get_all_related_objects() 返回属性关联对象 RelatedObject list
             for related in model._meta.get_all_related_objects(
                     include_hidden=True, include_proxy_eq=True):
 
                 field = related.field
 
-                if field.rel.on_delete == DO_NOTHING: 如果什么都不做, 循环继续
+                 # 如果什么都不做, 循环继续
+                if field.rel.on_delete == DO_NOTHING:
                     continue
 
+                # 找出所有关联表中的表项, 类似于下面的 SQL 语句:
+                # select * from self where new_objs.id in (select id from related)
                 sub_objs = self.related_objects(related, new_objs)
 
+                # can_fast_delete() 返回真的其中一个条件就是关联表中没有外键, 也就是说关联表中已经不存在级联了
                 if self.can_fast_delete(sub_objs, from_field=field):
                     self.fast_deletes.append(sub_objs)
+                # 如果关联表中还存在级联, 需要再次 collect()
                 elif sub_objs:
                     field.rel.on_delete(self, field, sub_objs, self.using)
 
