@@ -55,7 +55,8 @@ def patterns(prefix, *args): 特意留一个 prefix
             t.add_prefix(prefix)
 
         pattern_list.append(t)
-    返回 RegexURLPattern 对象的集合
+
+    # 返回 RegexURLResolver 或者 RegexURLPattern 对象的列表
     return pattern_list
 
 # url 函数
@@ -75,4 +76,4 @@ def url(regex, view, kwargs=None, name=None, prefix=''):
 
         # 返回 RegexURLPattern 的对象
         return RegexURLPattern(regex, view, kwargs, name)
-
+    # 从上面可以获知, url 会返回 RegexURLResolver 或者 RegexURLPattern 对象
