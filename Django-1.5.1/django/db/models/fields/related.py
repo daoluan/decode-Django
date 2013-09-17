@@ -1078,7 +1078,7 @@ class ForeignKey(RelatedField, Field):
                 'model': self.rel.to._meta.verbose_name, 'pk': value})
 
     def get_attname(self):
-        self.name 是关联属性名, 在 RelatedObject 中定义
+        # self.name 是关联属性名, 在 RelatedObject 中定义, self.attname 是当属性为外键的时候才会设置成 XXX_id 的形式
         return '%s_id' % self.name
 
     def get_validator_unique_lookup_type(self):

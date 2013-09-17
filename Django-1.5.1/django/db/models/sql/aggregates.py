@@ -66,6 +66,7 @@ class Aggregate(object):
         if isinstance(self.col, (list, tuple)):
             self.col = (change_map.get(self.col[0], self.col[0]), self.col[1])
 
+    渲染为 sql 语句
     def as_sql(self, qn, connection):
         "Return the aggregate, rendered as SQL."
 

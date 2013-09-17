@@ -7,6 +7,7 @@ from django.db.backends import BaseDatabaseIntrospection
 foreign_key_re = re.compile(r"\sCONSTRAINT `[^`]*` FOREIGN KEY \(`([^`]*)`\) REFERENCES `([^`]*)` \(`([^`]*)`\)")
 
 class DatabaseIntrospection(BaseDatabaseIntrospection):
+    一一对应起来
     data_types_reverse = {
         FIELD_TYPE.BLOB: 'TextField',
         FIELD_TYPE.CHAR: 'CharField',

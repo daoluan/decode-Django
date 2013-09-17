@@ -11,8 +11,10 @@ __all__ = ('backend', 'connection', 'connections', 'router', 'DatabaseError',
 if settings.DATABASES and DEFAULT_DB_ALIAS not in settings.DATABASES:
     raise ImproperlyConfigured("You must define a '%s' database" % DEFAULT_DB_ALIAS)
 
+# 加载解析 settings.DATABASES
 connections = ConnectionHandler(settings.DATABASES)
 
+# 作用不大
 router = ConnectionRouter(settings.DATABASE_ROUTERS) 经查 settings.DATABASE_ROUTERS 为空???
 
 # `connection`, `DatabaseError` and `IntegrityError` are convenient aliases

@@ -20,17 +20,18 @@ class DatabaseError(Exception):
 class IntegrityError(DatabaseError):
     pass
 
-
+导入数据库后端模块
 def load_backend(backend_name):
     # Look for a fully qualified database backend name
     try:
-        return import_module('.base', backend_name) 导入模块 django.db.backends
+        # 导入模块 django.db.backends, 一般会在这里成功返回, 除非指定了未知的数据库后端名
+        return import_module('.base', backend_name)
     except ImportError as e_user:
         # The database backend wasn't found. Display a helpful error message
         # listing all possible (built-in) database backends.
         backend_dir = os.path.join(os.path.dirname(upath(__file__)), 'backends')
         try:
-            # 内建的数据库后端驱动
+            # 内建的数据库后端驱动, 除了 dummy
             builtin_backends = [
                 name for _, name, ispkg in pkgutil.iter_modules([backend_dir])
                 if ispkg and name != 'dummy']
@@ -38,10 +39,10 @@ def load_backend(backend_name):
         except EnvironmentError:
             builtin_backends = []
 
-        # 查看是否给定的 backend_name 在内建的后端驱动中
+        # 查看是否给定的 backend_name 在内建的后端驱动中, 如果没有
         if backend_name not in ['django.db.backends.%s' % b for b in
                                 builtin_backends]:
-            异常
+            # 异常
             backend_reprs = map(repr, sorted(builtin_backends))
             error_msg = ("%r isn't an available database backend.\n"
                          "Try using 'django.db.backends.XXX', where XXX "
@@ -56,8 +57,11 @@ def load_backend(backend_name):
 class ConnectionDoesNotExist(Exception):
     pass
 
-
+解析并存储 settings.DATABASES
 class ConnectionHandler(object):
+    # 在 django.db.__init__ 中有一句:
+    # connections = ConnectionHandler(settings.DATABASES)
+    # 可见, ConnectionHandler.databases == settings.DATABASES
     def __init__(self, databases):
         if not databases:
             # 如果没有设置数据库, 将安装无用的数据库后端驱动
@@ -68,7 +72,9 @@ class ConnectionHandler(object):
             }
         else:
             self.databases = databases
-        self._connections = local() 线程本地数据
+
+        # 线程本地数据, 为该线程分配一个数据变量
+        self._connections = local()
 
     def ensure_defaults(self, alias):
         """
@@ -81,7 +87,10 @@ class ConnectionHandler(object):
         except KeyError:
             raise ConnectionDoesNotExist("The connection %s doesn't exist" % alias)
 
+        # 防止 ENGINE 没有设置
         conn.setdefault('ENGINE', 'django.db.backends.dummy')
+
+        # 看似多余的一项检测
         if conn['ENGINE'] == 'django.db.backends.' or not conn['ENGINE']:
             conn['ENGINE'] = 'django.db.backends.dummy'
 
@@ -89,20 +98,27 @@ class ConnectionHandler(object):
 
         conn.setdefault('TIME_ZONE', 'UTC' if settings.USE_TZ else settings.TIME_ZONE)
 
+        # 如果 ['NAME', 'USER', 'PASSWORD', 'HOST', 'PORT'] 都没有指定, 则默认为空
         for setting in ['NAME', 'USER', 'PASSWORD', 'HOST', 'PORT']:
             conn.setdefault(setting, '')
 
+        # 如果 ['TEST_CHARSET', 'TEST_COLLATION', 'TEST_NAME', 'TEST_MIRROR'] 没有指定, 默认为 None
         for setting in ['TEST_CHARSET', 'TEST_COLLATION', 'TEST_NAME', 'TEST_MIRROR']:
             conn.setdefault(setting, None)
 
     def __getitem__(self, alias):
+        # alias 别名
         if hasattr(self._connections, alias):
             return getattr(self._connections, alias)
 
         如果没有, 会尝试加载
         self.ensure_defaults(alias)
+
         db = self.databases[alias]
+
         backend = load_backend(db['ENGINE'])
+
+        # self._connections 中的每一项都是 DatabaseWrapper 实例
         conn = backend.DatabaseWrapper(db, alias)
         setattr(self._connections, alias, conn)
         return conn
@@ -119,7 +135,9 @@ class ConnectionHandler(object):
 
 class ConnectionRouter(object):
     def __init__(self, routers):
+
         self.routers = []
+
         for r in routers:
             if isinstance(r, six.string_types):
 

@@ -13,26 +13,36 @@ def ensure_default_manager(sender, **kwargs):
     _default_manager if it's not a subclass of Manager).
     """
     cls = sender
+
     if cls._meta.abstract:
         setattr(cls, 'objects', AbstractManagerDescriptor(cls))
         return
+
     elif cls._meta.swapped:
         setattr(cls, 'objects', SwappedManagerDescriptor(cls))
         return
+
     if not getattr(cls, '_default_manager', None):
         # Create the default manager, if needed.
         try:
             cls._meta.get_field('objects')
             raise ValueError("Model %s must specify a custom Manager, because it has a field named 'objects'" % cls.__name__)
+
         except FieldDoesNotExist:
             pass
+
+        # 关键的一步, 将一个 Manager 实例挂钩到 cls.objects
         cls.add_to_class('objects', Manager())
         cls._base_manager = cls.objects
+
     elif not getattr(cls, '_base_manager', None):
+
         default_mgr = cls._default_manager.__class__
+
         if (default_mgr is Manager or
                 getattr(default_mgr, "use_for_related_fields", False)):
             cls._base_manager = cls._default_manager
+
         else:
             # Default manager isn't a plain Manager class, or a suitable
             # replacement, so we walk up the base class hierarchy until we hit
@@ -47,7 +57,7 @@ def ensure_default_manager(sender, **kwargs):
 注册了 ensure_default_manager() 函数
 signals.class_prepared.connect(ensure_default_manager)
 
-# class Manager 一个摆着好看的类, 它强烈的依赖于 class QuerySet, 真正工作的是后者.
+# class Manager 一个摆着好看的类, 它强烈的依赖于 Query,QuerySet, 真正工作的是后者.
 class Manager(object):
     # Tracks each time a Manager instance is created. Used to retain order.
     creation_counter = 0
@@ -59,6 +69,7 @@ class Manager(object):
         self._inherited = False
         self._db = None
 
+    # contribute_to_class() 函数经常见到, 他的作用是将自己挂钩到一个目的对象, 或者将目的对象挂钩自己.
     def contribute_to_class(self, model, name):
         # TODO: Use weakref because of possible memory leak / circular reference.
         self.model = model
@@ -70,8 +81,10 @@ class Manager(object):
         else:
         # if not model._meta.abstract and not model._meta.swapped:
             setattr(model, name, ManagerDescriptor(self))
+
         if not getattr(model, '_default_manager', None) or self.creation_counter < model._default_manager.creation_counter:
             model._default_manager = self
+
         if model._meta.abstract or (self._inherited and not self.model._meta.proxy):
             model._meta.abstract_managers.append((self.creation_counter, name,
                     self))

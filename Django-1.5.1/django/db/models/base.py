@@ -542,13 +542,13 @@ class Model(six.with_metaclass(ModelBase)):
         model = self._meta.proxy_for_model
         return (model_unpickle, (model, defers), data)
 
-    获取主键值
+    # 获取主键值, 主键值可能是未被设置的
     def _get_pk_val(self, meta=None):
         if not meta:
             meta = self._meta
         return getattr(self, meta.pk.attname)
 
-    设置主键值
+    # 设置主键值, 等于是给 self 动态添加属性
     def _set_pk_val(self, value):
         return setattr(self, self._meta.pk.attname, value)
 
@@ -586,7 +586,7 @@ class Model(six.with_metaclass(ModelBase)):
         """
         using = using or router.db_for_write(self.__class__, instance=self)
         if force_insert and (force_update or update_fields):
-            不能强制插入和更新
+            不能强制同时插入和更新
             raise ValueError("Cannot force both insert and updating in model saving.")
 
         if update_fields is not None:
@@ -601,13 +601,15 @@ class Model(six.with_metaclass(ModelBase)):
 
             for field in self._meta.fields:
 
+                # 如果 field 不是主键
                 if not field.primary_key: !!!主键是不允许修改的
                     field_names.add(field.name)
 
+                    # 当 Field.field_name 和 Field.attname 不同时, field 是外键
                     if field.name != field.attname:
                         field_names.add(field.attname)
 
-            求出非 model 的表属性
+            求出非 model 的表属性, 即不存在的非法属性
             non_model_fields = update_fields.difference(field_names)
 
             如果不为空, 异常
@@ -623,7 +625,8 @@ class Model(six.with_metaclass(ModelBase)):
             field_names = set()
 
             for field in self._meta.fields:
-                if not field.primary_key and not hasattr(field, 'through'): !!! 主键是不允许修改的
+                # !!! 主键是不允许修改的
+                if not field.primary_key and not hasattr(field, 'through'):
                     field_names.add(field.attname)
 
             算出需要推迟的表属性, 内部是如何实现的?
@@ -714,24 +717,37 @@ class Model(six.with_metaclass(ModelBase)):
                 non_pks = [f for f in non_pks if f.name in update_fields or f.attname in update_fields]
 
             # First, try an UPDATE. If that doesn't update anything, do an INSERT.
-            pk_val = self._get_pk_val(meta) 直接获取主键的值
+            # 直接获取主键的值, 如果没有设置, 将会返回 None
+            pk_val = self._get_pk_val(meta)
+
+            # pk_set 标记 pk_val 是否为空
             pk_set = pk_val is not None
+
+            # 记录是否存在标记
             record_exists = True
+
             manager = cls._base_manager
 
-            if pk_set: 如果存在主键, 则执行更新操作
+            # 如果存在主键, 则执行更新操作
+            if pk_set:
                 # Determine if we should do an update (pk already exists, forced update,
                 # no force_insert)
                 if ((force_update or update_fields) or (not force_insert and
                         manager.using(using).filter(pk=pk_val).exists())):
 
                     if force_update or non_pks:
+                        # 整理更新信息, Field.pre_save() 只返回需要更新的值
                         values = [(f, None, (raw and getattr(self, f.attname) or f.pre_save(self, False))) for f in non_pks]
 
                         if values:
+                            # 执行更新
                             rows = manager.using(using).filter(pk=pk_val)._update(values)
+
+                            # 强制跟新失败, 并没有影响任何的表项
                             if force_update and not rows:
                                 raise DatabaseError("Forced update did not affect any rows.")
+
+                            # update_fields 中的更新并没有影响任何的表项
                             if update_fields and not rows:
                                 raise DatabaseError("Save with update_fields did not affect any rows.")
                 else:
@@ -747,21 +763,27 @@ class Model(six.with_metaclass(ModelBase)):
 
                 fields = meta.local_fields
 
-                主键不存在又提供 force_update, 矛盾
                 if not pk_set:
+                    # 异常: 主键不存在又提供 force_update, 矛盾
                     if force_update or update_fields:
                         raise ValueError("Cannot force an update in save() with no primary key.")
+
+                    # 筛选出表中自动填写的属性
                     fields = [f for f in fields if not isinstance(f, AutoField)]
 
-                只好执行插入操作
+                # 只好执行插入操作
                 record_exists = False
 
+                # 是否更新主键的值
                 update_pk = bool(meta.has_auto_field and not pk_set)
+
+                # 真正执行插入操作
                 result = manager._insert([self], fields=fields, return_id=update_pk, using=using, raw=raw)
 
                 if update_pk:
                     setattr(self, meta.pk.attname, result)
 
+            # 数据库 commit
             transaction.commit_unless_managed(using=using)
 
 
@@ -776,6 +798,7 @@ class Model(six.with_metaclass(ModelBase)):
 
     save_base.alters_data = True
 
+    # 借助 Collector 类实现
     def delete(self, using=None):
         using = using or router.db_for_write(self.__class__, instance=self)
         assert self._get_pk_val() is not None, "%s object can't be deleted because its %s attribute is set to None." % (self._meta.object_name, self._meta.pk.attname)

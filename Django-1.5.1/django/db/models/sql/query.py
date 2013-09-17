@@ -1,4 +1,6 @@
 """
+为 QuerySet 创建 sql 语句
+
 Create SQL statements for QuerySets.
 
 The code in here encapsulates all of the SQL construction so that QuerySets
@@ -36,6 +38,7 @@ class RawQuery(object):
     """
 
     def __init__(self, sql, using, params=None):
+        ???
         self.params = params or ()
         self.sql = sql
         self.using = using
@@ -59,8 +62,11 @@ class RawQuery(object):
         By default, this defers to the underlying backend operations, but
         it can be overridden by Query classes for specific backends.
         """
+        # 在 django.db.backends.__init__.py 中定义
         return connection.ops.convert_values(value, field)
 
+
+    # 获取列名
     def get_columns(self):
         if self.cursor is None:
             self._execute_query()
@@ -74,12 +80,14 @@ class RawQuery(object):
         # Always execute a new query for a new iterator.
         # This could be optimized with a cache at the expense of RAM.
         self._execute_query()
+
         if not connections[self.using].features.can_use_chunked_reads:
             # If the database can't use chunked reads we need to make sure we
             # evaluate the entire query up front.
             result = list(self.cursor)
         else:
             result = self.cursor
+
         return iter(result)
 
     def __repr__(self):
@@ -102,6 +110,8 @@ class Query(object):
     alias_prefix = 'T'
 
     """
+    查询关键字:
+
     QUERY_TERMS = set([
     'exact', 'iexact', 'contains', 'icontains', 'gt', 'gte', 'lt', 'lte', 'in',
     'startswith', 'istartswith', 'endswith', 'iendswith', 'range', 'year',
@@ -110,6 +120,7 @@ class Query(object):
     """
     query_terms = QUERY_TERMS
 
+    # 指定应该一个默认的聚集函数模块
     aggregates_module = base_aggregates_module
 
     # 有关 SQLCompiler 的资料不多.
@@ -117,15 +128,19 @@ class Query(object):
 
     def __init__(self, model, where=WhereNode):
         self.model = model
+
+        别名引用计数
         self.alias_refcount = {}
 
-        self.alias_map 是关于连接最重要的数据结构, 键即为连接的表
+        # self.alias_map 是关于连接最重要的数据结构, 键即为连接的表
         # alias_map is the most important data structure regarding joins 有关连接.
         # It's used for recording which joins exist in the query and what
         # type they are. The key is the alias of the joined table (possibly
         # the table name) and the value is JoinInfo from constants.py.
         self.alias_map = {}
+
         self.table_map = {}     # Maps table names to list of aliases.
+
         self.join_map = {}
 
         self.default_cols = True
@@ -160,6 +175,8 @@ class Query(object):
         """
         这应为级联查询, 有关 self.select_related 参看如下: select_related()
         Returns a QuerySet that will automatically “follow” foreign-key relationships, selecting that additional related-object data when it executes its query. This is a performance booster which results in (sometimes much) larger queries but means later use of foreign-key relationships won’t require database queries.
+
+        select_related works by creating an SQL join and including the fields of the related object in the SELECT statement. For this reason, select_related gets the related objects in the same database query. However, to avoid the much larger result set that would result from joining across a ‘many’ relationship, select_related is limited to single-valued relationships - foreign key and one-to-one.
         """
         self.select_related = False
 
@@ -251,10 +268,13 @@ class Query(object):
     构造编译器, 不懂
     def get_compiler(self, using=None, connection=None):
         if using is None and connection is None:
+            需要指定 using 或者 connection
             raise ValueError("Need either using or connection")
+
+        已经指定 using, 直接获取 DatabaseWrapper
         if using:
             connection = connections[using]
-
+???
         # Check that the compiler will be able to execute the query
         for alias, aggregate in self.aggregate_select.items():
             connection.ops.check_aggregate_support(aggregate)
@@ -262,7 +282,7 @@ class Query(object):
         构造一个 SQL 编译器
         return connection.ops.compiler(self.compiler)(self, connection, using)
 
-    不懂
+    返回 model._meta
     def get_meta(self):
         """
         Returns the Options instance (the model._meta) from which to start
@@ -350,6 +370,8 @@ class Query(object):
         By default, this defers to the underlying backend operations, but
         it can be overridden by Query classes for specific backends.
         """
+        # 从 BaseDatabaseOperation.convert_values() 的实现来看, 只实现了 interger,float,autofield 的转换, 其他的只是简单的返回而已.
+
         return connection.ops.convert_values(value, field)
 
     将聚合的结果转化为持久化类型
@@ -394,6 +416,7 @@ class Query(object):
 
             # Remove any aggregates marked for reduction from the subquery
             # and move them to the outer AggregateQuery.
+            # 试着将 self 中的 aggregate_select 填入 query.aggregate_select 中.
             for alias, aggregate in self.aggregate_select.items():
                 if aggregate.is_summary:
                     query.aggregate_select[alias] = aggregate
@@ -421,6 +444,7 @@ class Query(object):
         query.related_select_fields = []
 
         result = query.get_compiler(using).execute_sql(SINGLE)
+
         if result is None:
             result = [None for q in query.aggregate_select.items()]
 
@@ -433,6 +457,7 @@ class Query(object):
     def get_count(self, using):
         """
         执行 count()
+
         Performs a COUNT() query using the current filter constraints.
         """
         obj = self.clone()
@@ -440,13 +465,18 @@ class Query(object):
         if len(self.select) > 1 or self.aggregate_select or (self.distinct and self.distinct_fields):
             # If a select clause exists, then the query has already started to
             # specify the columns that are to be returned.
+            已经指定需要返回的属性, 这时候需要用到子查询
             # In this case, we need to use a subquery to evaluate the count.
             from django.db.models.sql.subqueries import AggregateQuery
+
+            # subquery = *self
             subquery = obj
             subquery.clear_ordering(True)
             subquery.clear_limits()
 
+            构造一个聚合查询实例
             obj = AggregateQuery(obj.model)
+
             try:
                 obj.add_subquery(subquery, using=using)
             except EmptyResultSet:
@@ -455,7 +485,10 @@ class Query(object):
                 # count is obviously 0
                 return 0
 
-        obj.add_count_column() 添加总计属性??? 不懂
+        添加总计属性??? 不懂
+        obj.add_count_column()
+
+        获取结果
         number = obj.get_aggregation(using=using)[None]
 
         # Apply offset and limit constraints manually, since using LIMIT/OFFSET
@@ -468,10 +501,13 @@ class Query(object):
 
         return number
 
-    测试是否有查询结果??? 不懂
+    测试是否有查询结果???
     def has_results(self, using):
         q = self.clone()
+
+        # 为什么要清楚 SELECT 果???
         q.clear_select_clause()
+
         q.add_extra({'a': 1}, None, None, None, None, None)
         q.set_extra_mask(['a'])
         q.clear_ordering(True)
@@ -489,6 +525,7 @@ class Query(object):
         The 'connector' parameter describes how to connect filters from the
         'rhs' query.
         """
+        不可以结合两个不同的模块 model
         assert self.model == rhs.model, \
                 "Cannot combine queries on two different base models."
         assert self.can_filter(), \
@@ -499,6 +536,7 @@ class Query(object):
             "Cannot combine queries with different distinct fields."
 
         self.remove_inherited_models()
+
         # Work out how to relabel the rhs aliases, if necessary.
         change_map = {}
         used = set()
@@ -628,23 +666,33 @@ class Query(object):
         pair need to be added to "target". It accepts three parameters:
         "target", and the model and list of fields being added for that model.
         """
-        field_names, defer = self.deferred_loading
+        field_names, defer = self.deferred_loading 被延迟加载的数据
+
         if not field_names:
             return
+
         orig_opts = self.model._meta
         seen = {}
+
+        # model:set(fields)
         must_include = {orig_opts.concrete_model: set([orig_opts.pk])}
+
         for field_name in field_names:
 
-            # LOOKUP_SEP = '__'
+            # LOOKUP_SEP = '__' 为什么会有这个???
             parts = field_name.split(LOOKUP_SEP)
 
+            # 当前的 model
             cur_model = self.model
+
+            # 当前的 _meta
             opts = orig_opts
 
             for name in parts[:-1]:
                 old_model = cur_model
 
+                # Options.get_field_by_name
+                # Returns the (field_object, model, direct, m2m)
                 source = opts.get_field_by_name(name)[0]
 
                 if is_reverse_o2o(source):
@@ -663,8 +711,10 @@ class Query(object):
                 add_to_dict(must_include, cur_model, opts.pk)
 
             field, model, _, _ = opts.get_field_by_name(parts[-1])
+
             if model is None:
                 model = cur_model
+
             if not is_reverse_o2o(field):
                 add_to_dict(seen, model, field)
 
@@ -674,11 +724,13 @@ class Query(object):
             # slight complexity here is handling fields that exist on parent
             # models.
             workset = {}
+
             for model, values in six.iteritems(seen):
                 for field, m in model._meta.get_fields_with_model():
                     if field in values:
                         continue
                     add_to_dict(workset, m or model, field)
+
             for model, values in six.iteritems(must_include):
                 # If we haven't included a model in workset, we don't add the
                 # corresponding must_include fields for that model, since an
@@ -686,6 +738,7 @@ class Query(object):
                 # "else" branch here.
                 if model in workset:
                     workset[model].update(values)
+
             for model, values in six.iteritems(workset):
                 callback(target, model, values)
         else:
@@ -786,13 +839,17 @@ class Query(object):
                 continue
 
             parent_alias = self.alias_map[alias].lhs_alias
+
             parent_louter = (parent_alias
                 and self.alias_map[parent_alias].join_type == self.LOUTER)
+
             already_louter = self.alias_map[alias].join_type == self.LOUTER
+
             if ((unconditional or self.alias_map[alias].nullable
                  or parent_louter) and not already_louter):
                 data = self.alias_map[alias]._replace(join_type=self.LOUTER)
                 self.alias_map[alias] = data
+
                 # Join type of 'alias' changed, so re-examine all aliases that
                 # refer to this one.
                 aliases.extend(
@@ -940,10 +997,12 @@ class Query(object):
             lhs.lhs_col = table.col
 
         If 'always_create' is True and 'reuse' is None, a new alias is always
-        created, regardless of whether one already exists or not. If
-        'always_create' is True and 'reuse' is a set, an alias in 'reuse' that
-        matches the connection will be returned, if possible.  If
-        'always_create' is False, the first existing alias that matches the
+        created, regardless of whether one already exists or not.
+
+        If 'always_create' is True and 'reuse' is a set, an alias in 'reuse' that
+        matches the connection will be returned, if possible.
+
+        If 'always_create' is False, the first existing alias that matches the
         'connection' is returned, if any. Otherwise a new join is created.
 
         If 'exclusions' is specified, it is something satisfying the container
@@ -1019,6 +1078,8 @@ class Query(object):
         we need to ensure that those other models have their tables included in
         the query.
 
+        如果此子模块 model 是从另一个模块中继承而来, 则需要包含父模块的表
+
         We do this as a separate step so that subclasses know which
         tables are going to be active in the query, without needing to compute
         all the select columns (this method is called from pre_sql_setup(),
@@ -1035,6 +1096,7 @@ class Query(object):
                 link_field = opts.get_ancestor_link(model)
                 seen[model] = self.join((root_alias, model._meta.db_table,
                         link_field.column, model._meta.pk.column))
+
         self.included_inherited_models = seen
 
     def remove_inherited_models(self):
@@ -1044,7 +1106,10 @@ class Query(object):
         """
         for key, alias in self.included_inherited_models.items():
             if key:
+                别名引用计数-1
                 self.unref_alias(alias)
+
+        # 清空继承模块
         self.included_inherited_models = {}
 
     def need_force_having(self, q_object):
@@ -1066,15 +1131,19 @@ class Query(object):
         Adds a single aggregate expression to the Query
         """
         opts = model._meta
+
         field_list = aggregate.lookup.split(LOOKUP_SEP)
+
         if len(field_list) == 1 and aggregate.lookup in self.aggregates:
             # Aggregate is over an annotation
             field_name = field_list[0]
             col = field_name
             source = self.aggregates[field_name]
+
             if not is_summary:
                 raise FieldError("Cannot compute %s('%s'): '%s' is an aggregate" % (
                     aggregate.name, field_name, field_name))
+
         elif ((len(field_list) > 1) or
             (field_list[0] not in [i.name for i in opts.fields]) or
             self.group_by is None or
@@ -1745,7 +1814,7 @@ class Query(object):
 
     def clear_select_clause(self):
         """
-        Removes all fields from SELECT clause.
+        Removes all fields from SELECT clause. 清楚所有的 SELECT 结果
         """
         self.select = []
         self.select_fields = []
@@ -1783,8 +1852,11 @@ class Query(object):
                 field, target, u2, joins, u3, u4 = self.setup_joins(
                         name.split(LOOKUP_SEP), opts, alias, False, allow_m2m,
                         True)
+
                 final_alias = joins[-1]
+
                 col = target.column
+
                 if len(joins) > 1:
                     join = self.alias_map[final_alias]
                     if col == join.rhs_join_col:
@@ -1792,6 +1864,7 @@ class Query(object):
                         final_alias = join.lhs_alias
                         col = join.lhs_join_col
                         joins = joins[:-1]
+
                 self.promote_joins(joins[1:])
 
                 self.select.append((final_alias, col))
@@ -1882,7 +1955,8 @@ class Query(object):
             # level.
             self.distinct = False
 
-        # Set only aggregate to be the count column.
+        # Set only aggregate to be the count column. 只设置聚合属性为总计 cont
+        ???
         # Clear out the select cache to reflect the new unmasked aggregates.
         self.aggregates = {None: count}
         self.set_aggregate_mask(None)

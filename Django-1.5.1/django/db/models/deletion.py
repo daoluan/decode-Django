@@ -14,6 +14,8 @@ class ProtectedError(IntegrityError):
 
 级联
 def CASCADE(collector, field, sub_objs, using):
+    # Collector.collect() 原型
+    # def collect(self, objs, source=None, nullable=False, collect_related=True, source_attr=None, reverse_dependency=False)
     collector.collect(sub_objs, source=field.rel.to,
                       source_attr=field.name, nullable=field.null)
 

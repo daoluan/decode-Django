@@ -31,9 +31,11 @@ class SQLCompiler(object):
         """
         if not self.query.tables:
             self.query.join((None, self.query.model._meta.db_table, None, None))
+
         if (not self.query.select and self.query.default_cols and not
                 self.query.included_inherited_models):
             self.query.setup_inherited_models()
+
         if self.query.select_related and not self.query.related_select_cols:
             self.fill_related_selections()
 
