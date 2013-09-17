@@ -93,6 +93,7 @@ class QuerySet(object):
         # list(qs), we make some effort here to be as efficient as possible
         # whilst not messing up any existing iterators against the QuerySet.
         if self._result_cache is None:
+            # QuerySet._result_cache 是在这里赋值
             if self._iter:
                 self._result_cache = list(self._iter)
             else:
@@ -119,6 +120,7 @@ class QuerySet(object):
         # 如果还是空
         if self._result_cache is None:
             self._iter = self.iterator()
+            这个时候, self._result_cache 依旧是空的,
             self._result_cache = []
 
         if self._iter:
@@ -138,10 +140,23 @@ class QuerySet(object):
                 yield self._result_cache[pos]
                 pos = pos + 1
 
+            # 如果 self._iter 为空, 将停止迭代, 引起迭代异常
             if not self._iter:
                 raise StopIteration
+
+            # 调用 self._fill_cache() 加载数据
             if len(self._result_cache) <= pos:
                 self._fill_cache()
+    """
+    将缓存填满
+    def _fill_cache(self, num=None):
+        if self._iter:
+            try:
+                for i in range(num or ITER_CHUNK_SIZE):
+                    self._result_cache.append(next(self._iter))
+            except StopIteration:
+                self._iter = None
+    """
 
     def __bool__(self):
 
@@ -304,12 +319,14 @@ class QuerySet(object):
             fields = self.model._meta.fields
 
         load_fields = []
+
         # If only/defer clauses have been specified,
         # build the list of fields that are to be loaded.
         if only_load:
             for field, model in self.model._meta.get_fields_with_model():
                 if model is None:
                     model = self.model
+
                 try:
                     if field.name in only_load[model]:
                         # Add a field that has been explicitly included
@@ -345,6 +362,7 @@ class QuerySet(object):
         if fill_cache:
             klass_info = get_klass_info(model, max_depth=max_depth,
                                         requested=requested, only_load=only_load)
+
         for row in compiler.results_iter():
             if fill_cache:
                 obj, _ = get_cached_row(row, index_start, db, klass_info,
